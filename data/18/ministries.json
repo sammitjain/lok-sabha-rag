@@ -1,0 +1,282 @@
+[
+  {
+    "minCode": 30,
+    "minName": "AGRICULTURE AND FARMERS WELFARE",
+    "minNameHindi": "कृषि और किसान कल्याण"
+  },
+  {
+    "minCode": 16,
+    "minName": "ATOMIC ENERGY",
+    "minNameHindi": "परमाणु उर्जा"
+  },
+  {
+    "minCode": 58,
+    "minName": "AYUSH",
+    "minNameHindi": "आयुष"
+  },
+  {
+    "minCode": 17,
+    "minName": "CHEMICALS AND FERTILIZERS",
+    "minNameHindi": "रसायन और उर्वरक"
+  },
+  {
+    "minCode": 37,
+    "minName": "CIVIL AVIATION",
+    "minNameHindi": "नागर विमानन"
+  },
+  {
+    "minCode": 29,
+    "minName": "COAL",
+    "minNameHindi": "कोयला "
+  },
+  {
+    "minCode": 20,
+    "minName": "COMMERCE AND INDUSTRY",
+    "minNameHindi": "वाणिज्य और उद्योग "
+  },
+  {
+    "minCode": 1,
+    "minName": "COMMUNICATIONS",
+    "minNameHindi": "संचार"
+  },
+  {
+    "minCode": 11,
+    "minName": "CONSUMER AFFAIRS, FOOD AND PUBLIC DISTRIBUTION",
+    "minNameHindi": "उपभोक्ता मामले, खाद्य और सार्वजनिक वितरण"
+  },
+  {
+    "minCode": 63,
+    "minName": "COOPERATION",
+    "minNameHindi": "सहकारिता"
+  },
+  {
+    "minCode": 38,
+    "minName": "CORPORATE AFFAIRS",
+    "minNameHindi": "कॉरर्पोरेट कार्य"
+  },
+  {
+    "minCode": 51,
+    "minName": "CULTURE",
+    "minNameHindi": "संस्कृति"
+  },
+  {
+    "minCode": 18,
+    "minName": "DEFENCE",
+    "minNameHindi": "रक्षा "
+  },
+  {
+    "minCode": 47,
+    "minName": "DEVELOPMENT OF NORTH EASTERN REGION",
+    "minNameHindi": "उत्तर पूर्वी क्षेत्र विकास "
+  },
+  {
+    "minCode": 23,
+    "minName": "EARTH SCIENCES",
+    "minNameHindi": "पृथ्वी विज्ञान "
+  },
+  {
+    "minCode": 12,
+    "minName": "EDUCATION",
+    "minNameHindi": "शिक्षा "
+  },
+  {
+    "minCode": 59,
+    "minName": "ELECTRONICS AND INFORMATION TECHNOLOGY",
+    "minNameHindi": "इलेक्ट्रोनिकी और सूचना प्रौद्योगिकी"
+  },
+  {
+    "minCode": 10,
+    "minName": "ENVIRONMENT, FOREST AND CLIMATE CHANGE",
+    "minNameHindi": "पर्यावरण, वन और जलवायु परिवर्तन"
+  },
+  {
+    "minCode": 2,
+    "minName": "EXTERNAL AFFAIRS",
+    "minNameHindi": "विदेश "
+  },
+  {
+    "minCode": 39,
+    "minName": "FINANCE",
+    "minNameHindi": "वित्त"
+  },
+  {
+    "minCode": 61,
+    "minName": "FISHERIES, ANIMAL HUSBANDRY AND DAIRYING ",
+    "minNameHindi": " मत्स्यपालन, पशुपालन और डेयरी"
+  },
+  {
+    "minCode": 46,
+    "minName": "FOOD PROCESSING INDUSTRIES",
+    "minNameHindi": "खाद्य प्रसंस्करण उद्योग "
+  },
+  {
+    "minCode": 32,
+    "minName": "HEALTH AND FAMILY WELFARE",
+    "minNameHindi": "स्वास्थ्य एवं परिवार कल्याण"
+  },
+  {
+    "minCode": 9,
+    "minName": "HEAVY INDUSTRIES ",
+    "minNameHindi": "भारी उद्योग"
+  },
+  {
+    "minCode": 33,
+    "minName": "HOME AFFAIRS",
+    "minNameHindi": "गृह "
+  },
+  {
+    "minCode": 60,
+    "minName": "HOUSING AND URBAN AFFAIRS",
+    "minNameHindi": "आवासन और शहरी कार्य"
+  },
+  {
+    "minCode": 4,
+    "minName": "INFORMATION AND BROADCASTING",
+    "minNameHindi": "सूचना और प्रसारण"
+  },
+  {
+    "minCode": 62,
+    "minName": "JAL SHAKTI",
+    "minNameHindi": "जल शक्ति"
+  },
+  {
+    "minCode": 40,
+    "minName": "LABOUR AND EMPLOYMENT",
+    "minNameHindi": "श्रम और रोजगार "
+  },
+  {
+    "minCode": 21,
+    "minName": "LAW AND JUSTICE",
+    "minNameHindi": "विधि और न्याय"
+  },
+  {
+    "minCode": 42,
+    "minName": "MICRO, SMALL AND MEDIUM ENTERPRISES",
+    "minNameHindi": "सूक्ष्म , लघु और मध्यम उद्यम"
+  },
+  {
+    "minCode": 53,
+    "minName": "MINES",
+    "minNameHindi": "खान"
+  },
+  {
+    "minCode": 52,
+    "minName": "MINORITY AFFAIRS",
+    "minNameHindi": "अल्पसंख्यक कार्य"
+  },
+  {
+    "minCode": 22,
+    "minName": "NEW AND RENEWABLE ENERGY",
+    "minNameHindi": "नवीन और नवीकरणीय ऊर्जा "
+  },
+  {
+    "minCode": 50,
+    "minName": "PANCHAYATI RAJ",
+    "minNameHindi": "पंचायती राज "
+  },
+  {
+    "minCode": 36,
+    "minName": "PARLIAMENTARY AFFAIRS",
+    "minNameHindi": "संसदीय कार्य "
+  },
+  {
+    "minCode": 24,
+    "minName": "PERSONNEL, PUBLIC GRIEVANCES AND PENSIONS",
+    "minNameHindi": "कार्मिक, लोक शिकायत और पेंशन "
+  },
+  {
+    "minCode": 34,
+    "minName": "PETROLEUM AND NATURAL GAS",
+    "minNameHindi": "पेट्रोलियम और प्राकृतिक गैस "
+  },
+  {
+    "minCode": 25,
+    "minName": "PLANNING",
+    "minNameHindi": "योजना "
+  },
+  {
+    "minCode": 7,
+    "minName": "PORTS, SHIPPING AND WATERWAYS",
+    "minNameHindi": "पत्तन, पोत परिवहन और जलमार्ग "
+  },
+  {
+    "minCode": 5,
+    "minName": "POWER",
+    "minNameHindi": "विद्युत"
+  },
+  {
+    "minCode": 15,
+    "minName": "PRIME MINISTER",
+    "minNameHindi": "प्रधान मंत्री "
+  },
+  {
+    "minCode": 13,
+    "minName": "RAILWAYS",
+    "minNameHindi": "रेल"
+  },
+  {
+    "minCode": 55,
+    "minName": "ROAD TRANSPORT AND HIGHWAYS",
+    "minNameHindi": "सड़क परिवहन और राजमार्ग"
+  },
+  {
+    "minCode": 26,
+    "minName": "RURAL DEVELOPMENT",
+    "minNameHindi": "ग्रामीण विकास"
+  },
+  {
+    "minCode": 27,
+    "minName": "SCIENCE AND TECHNOLOGY",
+    "minNameHindi": "विज्ञान और प्रौद्योगिकी"
+  },
+  {
+    "minCode": 57,
+    "minName": "SKILL DEVELOPMENT AND ENTREPRENEURSHIP",
+    "minNameHindi": "कौशल विकास और उद्यमशीलता"
+  },
+  {
+    "minCode": 35,
+    "minName": "SOCIAL JUSTICE AND EMPOWERMENT",
+    "minNameHindi": "सामाजिक न्याय और अधिकारिता"
+  },
+  {
+    "minCode": 28,
+    "minName": "SPACE",
+    "minNameHindi": "अंतरिक्ष"
+  },
+  {
+    "minCode": 44,
+    "minName": "STATISTICS AND PROGRAMME IMPLEMENTATION",
+    "minNameHindi": "सांख्यिकी और कार्यक्रम कार्यान्वयन"
+  },
+  {
+    "minCode": 6,
+    "minName": "STEEL",
+    "minNameHindi": "इस्पात"
+  },
+  {
+    "minCode": 41,
+    "minName": "TEXTILES",
+    "minNameHindi": "वस्‍त्र"
+  },
+  {
+    "minCode": 43,
+    "minName": "TOURISM",
+    "minNameHindi": "पर्यटन"
+  },
+  {
+    "minCode": 3,
+    "minName": "TRIBAL AFFAIRS",
+    "minNameHindi": "जनजातीय कार्य"
+  },
+  {
+    "minCode": 54,
+    "minName": "WOMEN AND CHILD DEVELOPMENT",
+    "minNameHindi": "महिला और बाल विकास"
+  },
+  {
+    "minCode": 19,
+    "minName": "YOUTH AFFAIRS AND SPORTS",
+    "minNameHindi": "युवा कार्यक्रम और खेल"
+  }
+]

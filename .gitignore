@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+wheels/
+
+# Virtual environments
+.venv/
+
+# Environment & secrets
+.env
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# === Data blobs (too large for git) ===
+# PDFs (~5.8 GB)
+data/*/pdfs/
+# Parsed JSON (~289 MB)
+data/*/parsed/
+# Chunks JSONL (~390 MB, individual files near 100 MB limit)
+data/*/chunks/
+# Curation progress & failure logs (machine-specific)
+data/*/progress.json
+data/*/failed_downloads.txt
+data/*/failed_parse.txt
+data/*/unmatched_ministries.txt
+data/*/unmatched_ministries_examples.jsonl
+# Audit / debug outputs
+data/_question_text_audit/
+
+# === Dev scripts (local-only exploration tools) ===
+src/lok_sabha_rag/dev/
+
+# Dev artifacts
+docling_trial_out/
+evidence.json
+stats_*.txt
+
+# Test caches
+.pytest_cache/

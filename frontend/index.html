@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lok Sabha Q&A Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css?v=16">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Lok Sabha Questions & Answers</h1>
+            <p class="subtitle">Search parliamentary records from the 18th Lok Sabha</p>
+        </header>
+
+        <main class="main">
+            <form id="search-form" class="search-form">
+                <div class="search-box">
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="query-input"
+                            name="query"
+                            placeholder="Ask about health policy, infrastructure, education... (type mp: to autocomplete MP names)"
+                            autocomplete="off"
+                        >
+                        <div id="mp-dropdown" class="mp-dropdown"></div>
+                    </div>
+                    <button type="submit" id="submit-btn">
+                        <span class="btn-text">Search</span>
+                        <span class="btn-loading">
+                            <span class="spinner"></span>
+                        </span>
+                    </button>
+                </div>
+
+                <div class="options">
+                    <div class="mode-toggle">
+                        <label class="toggle">
+                            <input type="checkbox" id="ai-mode" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-label">AI-synthesized answer</span>
+                    </div>
+                    
+                    <div class="retrieval-controls">
+                        <div class="topk-control">
+                            <label for="topk-input" title="M: Total chunks retrieved from vector search">Chunks (M):</label>
+                            <input type="number" id="topk-input" value="50" min="5" max="200" step="5">
+                        </div>
+                        <div class="topk-control">
+                            <label for="topn-input" title="N: Max unique questions to keep">Questions (N):</label>
+                            <input type="number" id="topn-input" value="10" min="1" max="50" step="1">
+                        </div>
+                        <div class="topk-control">
+                            <label for="cpq-input" title="C: Leading chunks per question (skips trailing annexures)">Chunks/Q (C):</label>
+                            <input type="number" id="cpq-input" value="1" min="1" max="10" step="1">
+                        </div>
+                        <div class="topk-control">
+                            <label for="topq-input" title="Q: Recent questions in MP stats summary">Stats (Q):</label>
+                            <input type="number" id="topq-input" value="15" min="1" max="50" step="1">
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <div id="active-filters" class="active-filters"></div>
+
+            <div id="results-layout" class="results-layout">
+                <section id="results" class="results">
+                    <div id="answer-section" class="answer-section">
+                        <h2>Answer</h2>
+                        <div id="answer-content" class="answer-content"></div>
+                    </div>
+
+                    <div class="evidence-section">
+                        <h2>
+                            <span id="evidence-title">Sources</span>
+                            <span id="evidence-count" class="evidence-count"></span>
+                        </h2>
+                        <div id="evidence-cards" class="evidence-cards"></div>
+                    </div>
+                </section>
+
+                <aside id="stats-panel" class="stats-panel">
+                    <div class="stats-panel-header">
+                        <h2>MP Activity Summary</h2>
+                    </div>
+                    <div id="stats-content" class="stats-content"></div>
+                </aside>
+            </div>
+
+            <section id="error" class="error">
+                <div class="error-content">
+                    <p id="error-message"></p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Data sourced from <a href="https://sansad.in/ls/questions/questions-and-answers" target="_blank">sansad.in</a></p>
+        </footer>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <div class="modal-header">
+                <h3 id="modal-title"></h3>
+                <div class="modal-chips" id="modal-chips"></div>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer" id="modal-footer"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/app.js?v=16"></script>
+</body>
+</html>

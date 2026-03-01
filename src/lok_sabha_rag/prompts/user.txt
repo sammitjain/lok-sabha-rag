@@ -1,0 +1,10 @@
+USER QUESTION:
+{query}
+
+CONTEXT:
+{context}
+
+TASK:
+Answer the user question using ONLY the CONTEXT above. Each evidence group is labeled [Q#] — cite every factual claim using these labels (e.g., [Q1], [Q2][Q3]).
+Follow the structured response format from your instructions (Summary, Detailed Findings, Limitations).
+If the question is ambiguous, ask 1–3 short clarifying questions in the Limitations section.
