@@ -2,6 +2,9 @@
 
 A Retrieval-Augmented Generation system for searching and synthesizing answers from Indian Lok Sabha (parliamentary) question-and-answer records.
 
+![OpenSansad Demo](docs/assets/demo_retrieval.png)
+![OpenSansad Demo](docs/assets/demo_synthesis.png)
+
 ## Features
 
 - **Semantic search** across 86,000+ parliamentary questions (Lok Sabha 17 & 18)
