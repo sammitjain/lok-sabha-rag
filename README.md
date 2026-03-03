@@ -1,6 +1,14 @@
-# Lok Sabha Q&A RAG
+<p align="center">
+  <img src="docs/assets/OpenSansad_Logo.png" alt="OpenSansad Logo" width="200">
+</p>
 
-A Retrieval-Augmented Generation system for searching and synthesizing answers from Indian Lok Sabha (parliamentary) question-and-answer records.
+<h1 align="center">OpenSansad — Lok Sabha Q&A RAG</h1>
+
+<p align="center">
+  A personal project to bring transparency to India's parliamentary proceedings by making Lok Sabha Q&A records searchable, explorable, and AI-augmented.
+</p>
+
+Part of the **OpenSansad** initiative — an effort to make Sansad's (Indian Parliament's) workings more accessible and transparent through open data and open-source tooling. Data sourced from [Digital Sansad](https://sansad.in/).
 
 ![OpenSansad Demo](docs/assets/demo_retrieval.png)
 ![OpenSansad Demo](docs/assets/demo_synthesis.png)
