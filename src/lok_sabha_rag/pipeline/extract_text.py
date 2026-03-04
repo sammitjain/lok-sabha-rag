@@ -1,4 +1,4 @@
-"""Extract text from downloaded Lok Sabha PDFs (v0).
+"""Extract text from downloaded Lok Sabha PDFs.
 
 Reads PDFs under:
   data/<lok>/pdfs/session_<n>/
@@ -6,10 +6,10 @@ Reads PDFs under:
 Writes parsed JSON under:
   data/<lok>/parsed/session_<n>/
 
-Each output JSON includes:
-- parser engine + version
-- per-page text
-- concatenated full_text
+Extraction strategy:
+  1. Docling (structure-aware markdown) — fast, handles text-layer PDFs
+  2. If Docling returns empty text → fallback to Docling + EasyOCR
+     (handles scanned / image-only PDFs)
 
 Idempotent + resumable:
 - skips if output JSON already exists (unless --overwrite)
@@ -17,33 +17,149 @@ Idempotent + resumable:
 - lightweight progress print every few seconds
 
 Usage:
-  uv add pymupdf typer
+  # Batch extraction
   uv run python -m lok_sabha_rag.pipeline.extract_text run --lok 18 --sessions 7
   uv run python -m lok_sabha_rag.pipeline.extract_text run --lok 18 --sessions 7 --max-files 10
 
-Notes:
-- This is intentionally basic: text-based PDFs only (no OCR).
-- If you later switch parsers (paid/local), keep the output schema stable.
+  # Dry-run: test extraction on a single file (prints output, does not write)
+  uv run python -m lok_sabha_rag.pipeline.extract_text test data/18/pdfs/session_2/AS39_0OzSlM.pdf
+  uv run python -m lok_sabha_rag.pipeline.extract_text test data/18/pdfs/session_2/AS39_0OzSlM.pdf --engine easyocr
 """
 
 from __future__ import annotations
 
 import json
 import random
-import re
 import time
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-import pymupdf
 import typer
+
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    EasyOcrOptions,
+    PdfPipelineOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
 
 app = typer.Typer(no_args_is_help=True)
 
-from docling.document_converter import DocumentConverter
 
-# Initialize once to avoid reloading models in a loop
-converter = DocumentConverter()
+# ── Lazy-loaded converters ────────────────────────────────────────────────────
+# Avoids slow startup (model downloads) when OCR isn't needed.
+
+_converter_default: DocumentConverter | None = None
+_converter_ocr: DocumentConverter | None = None
+
+
+def _get_default_converter() -> DocumentConverter:
+    """Docling converter without OCR — fast, for text-layer PDFs."""
+    global _converter_default
+    if _converter_default is None:
+        _converter_default = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_options=PdfPipelineOptions(do_ocr=False)
+                )
+            }
+        )
+    return _converter_default
+
+
+def _get_ocr_converter() -> DocumentConverter:
+    """Docling converter with EasyOCR — slower, for scanned/image PDFs."""
+    global _converter_ocr
+    if _converter_ocr is None:
+        _converter_ocr = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_options=PdfPipelineOptions(
+                        do_ocr=True,
+                        ocr_options=EasyOcrOptions(
+                            lang=["en"],
+                            force_full_page_ocr=True,
+                        ),
+                    )
+                )
+            }
+        )
+    return _converter_ocr
+
+
+# ── Core extraction ───────────────────────────────────────────────────────────
+
+
+def _docling_convert(converter: DocumentConverter, pdf_path: Path) -> tuple[str, int, float]:
+    """Run a Docling converter and return (markdown, num_pages, elapsed_sec)."""
+    t0 = time.time()
+    result = converter.convert(str(pdf_path))
+    doc = result.document
+    markdown = doc.export_to_markdown()
+    num_pages = len(doc.pages) if hasattr(doc, "pages") else 0
+    return markdown, num_pages, round(time.time() - t0, 2)
+
+
+def extract_single_pdf(
+    pdf_path: Path,
+    *,
+    engine: str = "auto",
+) -> dict:
+    """Extract text from a single PDF and return a parsed-JSON-ready dict.
+
+    Parameters
+    ----------
+    pdf_path : Path
+        Path to the PDF file.
+    engine : str
+        "auto"    — Docling first, EasyOCR fallback if empty (default)
+        "docling" — Docling only, no OCR fallback
+        "easyocr" — Force EasyOCR (skip Docling-only pass)
+
+    Returns
+    -------
+    dict with keys: pdf_filename, pdf_relpath, engine, engine_version,
+    extracted_at_unix, processing_time_sec, full_markdown, metadata, ocr_fallback
+    """
+    total_start = time.time()
+    ocr_fallback = False
+
+    if engine in ("auto", "docling"):
+        markdown, num_pages, elapsed = _docling_convert(_get_default_converter(), pdf_path)
+
+        if engine == "auto" and not markdown.strip():
+            # Empty text — likely a scanned PDF, retry with OCR
+            ocr_fallback = True
+            markdown, num_pages, ocr_elapsed = _docling_convert(_get_ocr_converter(), pdf_path)
+            elapsed += ocr_elapsed
+
+    elif engine == "easyocr":
+        markdown, num_pages, elapsed = _docling_convert(_get_ocr_converter(), pdf_path)
+        ocr_fallback = True
+
+    else:
+        raise ValueError(f"Unknown engine: {engine!r}. Use 'auto', 'docling', or 'easyocr'.")
+
+    engine_label = "docling+easyocr" if ocr_fallback else "docling"
+
+    return {
+        "pdf_filename": pdf_path.name,
+        "pdf_relpath": str(pdf_path.as_posix()),
+        "engine": engine_label,
+        "engine_version": "2.x",
+        "extracted_at_unix": int(time.time()),
+        "processing_time_sec": round(time.time() - total_start, 2),
+        "full_markdown": markdown,
+        "metadata": {
+            "title": None,
+            "num_pages": num_pages,
+        },
+        "ocr_fallback": ocr_fallback,
+    }
+
+
+# ── CLI helpers ───────────────────────────────────────────────────────────────
+
 
 def _parse_sessions(sessions: str) -> List[int]:
     out: List[int] = []
@@ -72,69 +188,7 @@ def _iter_pdf_files(pdf_dir: Path) -> Iterable[Path]:
     yield from sorted(pdf_dir.glob("*.pdf"))
 
 
-def extract_pdf_with_docling(pdf_path: Path) -> dict:
-    """Refactored extraction using Docling for structure-aware parsing."""
-    start_time = time.time()
-    
-    # Run the conversion
-    result = converter.convert(pdf_path)
-    doc = result.document
-    
-    # 1. Export to Markdown (Best for LLMs/RAG)
-    full_markdown = doc.export_to_markdown()
-    
-    # 2. Export to Dictionary (The raw Docling structure if you need it)
-    # This is quite large, so we usually just keep the essential parts
-    doc_dict = doc.export_to_dict()
-
-    # 3. Create a stable output schema matching your v0
-    # We map Docling's pages to your previous format
-    pages = []
-    # Note: Docling's page-level access varies by document structure, 
-    # but for simple 2-page PDFs, we can extract text per page easily.
-    # For now, we store the full text and markdown as the primary assets.
-
-    return {
-        "pdf_filename": pdf_path.name,
-        "pdf_relpath": str(pdf_path.as_posix()),
-        "engine": "docling",
-        "engine_version": "2.x", # Docling is currently in v2
-        "extracted_at_unix": int(time.time()),
-        "processing_time_sec": round(time.time() - start_time, 2),
-        # "full_text": doc.export_to_text(),
-        "full_markdown": full_markdown, # NEW: The 'Golden' source for RAG
-        "metadata": {
-            "title": getattr(doc, "title", None),
-            "num_pages": len(doc.pages) if hasattr(doc, 'pages') else 0
-        }
-    }
-
-def extract_pdf_text(pdf_path: Path) -> dict:
-    """Return parsed JSON-ready dict for a PDF."""
-    doc = pymupdf.open(pdf_path)
-
-    pages = []
-    full_parts = []
-    for i in range(doc.page_count):
-        page = doc.load_page(i)
-        text = page.get_text("text") or ""
-        # normalize whitespace lightly; keep newlines (helps paragraph splitting later)
-        text = text.replace("\r\n", "\n").replace("\r", "\n")
-        pages.append({"page": i + 1, "text": text})
-        full_parts.append(text)
-
-    full_text = "\n\n".join(full_parts).strip()
-
-    return {
-        "pdf_filename": pdf_path.name,
-        "pdf_relpath": str(pdf_path.as_posix()),
-        "engine": "pymupdf",
-        "engine_version": getattr(pymupdf, "__doc__", None),
-        "extracted_at_unix": int(time.time()),
-        "page_count": doc.page_count,
-        "pages": pages,
-        "full_text": full_text,
-    }
+# ── Commands ──────────────────────────────────────────────────────────────────
 
 
 @app.command()
@@ -147,18 +201,19 @@ def run(
     sleep_max: float = typer.Option(0.0, help="Optional max seconds between PDFs"),
     max_files: Optional[int] = typer.Option(None, help="Stop after processing N PDFs (for testing)"),
 ) -> None:
+    """Batch-extract text from all PDFs for the given Lok Sabha sessions."""
     base = Path(base_dir) / str(lok)
     if not base.exists():
         raise typer.BadParameter(f"Missing data directory: {base}")
 
     sess_list = _parse_sessions(sessions)
-
     failed_log = base / "failed_parse.txt"
 
     processed = 0
     extracted = 0
     skipped = 0
     errors = 0
+    ocr_fallbacks = 0
 
     last_report = time.time()
     report_interval = 15
@@ -182,9 +237,17 @@ def run(
                 skipped += 1
             else:
                 try:
-                    parsed = extract_pdf_with_docling(pdf_path)
+                    parsed = extract_single_pdf(pdf_path, engine="auto")
+
+                    if parsed.get("ocr_fallback"):
+                        ocr_fallbacks += 1
+                        print(f"  [ocr] {pdf_path.name} — EasyOCR fallback ({parsed['processing_time_sec']}s)")
+
                     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
-                    tmp.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+                    tmp.write_text(
+                        json.dumps(parsed, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
                     tmp.replace(out_path)
                     extracted += 1
                 except Exception as e:
@@ -195,13 +258,15 @@ def run(
 
             now = time.time()
             if now - last_report >= report_interval:
-                print(f"Progress: processed={processed} extracted={extracted} skipped={skipped} errors={errors}")
+                print(
+                    f"Progress: processed={processed} extracted={extracted} "
+                    f"skipped={skipped} errors={errors} ocr_fallbacks={ocr_fallbacks}"
+                )
                 last_report = now
 
             if max_files is not None and processed >= max_files:
                 print("Reached --max-files limit")
-                print(f"Processed={processed} extracted={extracted} skipped={skipped} errors={errors}")
-                return
+                break
 
             # optional sleep between PDFs (usually keep 0; parsing is local)
             if sleep_max > 0:
@@ -210,8 +275,50 @@ def run(
                 time.sleep(lo + random.random() * (hi - lo))
 
     print("\nDone.")
-    print(f"Processed={processed} extracted={extracted} skipped={skipped} errors={errors}")
+    print(
+        f"Processed={processed} extracted={extracted} skipped={skipped} "
+        f"errors={errors} ocr_fallbacks={ocr_fallbacks}"
+    )
     print(f"Failed log: {failed_log}")
+
+
+@app.command()
+def test(
+    pdf_path: str = typer.Argument(..., help="Path to a single PDF file"),
+    engine: str = typer.Option(
+        "auto",
+        help="Engine: 'auto' (Docling + OCR fallback), 'docling' (no OCR), 'easyocr' (force OCR)",
+    ),
+) -> None:
+    """Dry-run: extract a single PDF and print the results (does not write any files)."""
+    path = Path(pdf_path)
+    if not path.exists():
+        raise typer.BadParameter(f"File not found: {path}")
+
+    print(f"PDF:    {path}")
+    print(f"Engine: {engine}")
+    print()
+
+    parsed = extract_single_pdf(path, engine=engine)
+
+    md = parsed["full_markdown"]
+    words = len(md.split()) if md else 0
+    chars = len(md) if md else 0
+
+    print(f"Engine used:   {parsed['engine']}")
+    print(f"OCR fallback:  {parsed['ocr_fallback']}")
+    print(f"Time:          {parsed['processing_time_sec']}s")
+    print(f"Pages:         {parsed['metadata']['num_pages']}")
+    print(f"Characters:    {chars}")
+    print(f"Words:         {words}")
+    print()
+
+    if md:
+        print("─── Text preview (first 500 chars) ─────────────────────────────────")
+        print(md[:500])
+        print("────────────────────────────────────────────────────────────────────")
+    else:
+        print("(empty — no text extracted)")
 
 
 if __name__ == "__main__":

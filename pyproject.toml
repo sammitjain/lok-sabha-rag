@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "docling>=2.73.0",
+    "easyocr>=1.7.2",
     "fastapi>=0.129.0",
     "httpx>=0.28.1",
     "openai>=2.21.0",
@@ -14,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "qdrant-client[fastembed]>=1.16.2",
     "sse-starlette>=3.2.0",
+    "tesserocr>=2.10.0",
     "typer>=0.21.2",
     "uvicorn>=0.41.0",
 ]
