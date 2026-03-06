@@ -1,27 +1,22 @@
-"""Build a SQLite metadata database from Lok Sabha index JSONL files.
+"""Build a SQLite metadata database from the HuggingFace dataset.
 
 Usage:
     uv run python -m lok_sabha_rag.pipeline.build_metadata_db
     uv run python -m lok_sabha_rag.pipeline.build_metadata_db --db-path data/metadata.db
-    uv run python -m lok_sabha_rag.pipeline.build_metadata_db --data-dir /other/data
+    uv run python -m lok_sabha_rag.pipeline.build_metadata_db --parquet /path/to/local.parquet
 """
 
 from __future__ import annotations
 
-import json
-import re
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
 import typer
 
+from lok_sabha_rag.config import DATA_DIR, HF_DATASET_REPO, METADATA_DB_PATH
+
 app = typer.Typer(add_completion=False)
-
-DEFAULT_DATA_DIR = Path("data")
-DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "metadata.db"
-
-JSONL_GLOB = "*/index_session_*.jsonl"
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -53,40 +48,38 @@ CREATE INDEX IF NOT EXISTS idx_qmp_mp
     ON question_mps (mp_name);
 """
 
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-_DATE_RE = re.compile(r"^(\d{2})\.(\d{2})\.(\d{4})$")
-
-
-def _convert_date(raw: str | None) -> str | None:
-    """Convert DD.MM.YYYY → YYYY-MM-DD.  Pass through anything else as-is."""
-    if not raw:
-        return None
-    m = _DATE_RE.match(raw.strip())
-    if not m:
-        return raw.strip() or None
-    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
 
 
 def _pdf_filename_from_url(url: str | None) -> str | None:
     """Extract filename from a sansad.in download URL."""
     if not url:
         return None
-    # e.g. "https://sansad.in/getFile/.../AS500_kcKX5O.pdf?source=pqals"
     fname = url.split("/")[-1].split("?")[0]
     return fname if fname else None
 
 
+def _load_dataset(dataset: str, parquet: str | None) -> list[dict]:
+    """Load dataset rows from HF or a local parquet file."""
+    if parquet:
+        from datasets import Dataset as HFDataset
+
+        typer.echo(f"Loading from local parquet: {parquet}")
+        ds = HFDataset.from_parquet(parquet)
+    else:
+        from datasets import load_dataset
+
+        typer.echo(f"Loading from HuggingFace: {dataset}")
+        ds = load_dataset(dataset, split="train")
+
+    return list(ds)
+
+
 # ── Core ──────────────────────────────────────────────────────────────────────
 
-def _build(data_dir: Path, db_path: Path) -> None:
-    jsonl_files = sorted(data_dir.glob(JSONL_GLOB))
-    if not jsonl_files:
-        typer.echo(f"No index JSONL files found matching {data_dir / JSONL_GLOB}")
-        raise typer.Exit(code=1)
 
-    typer.echo(f"Found {len(jsonl_files)} index files in {data_dir.resolve()}")
-
+def _build(rows: list[dict], db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA_SQL)
@@ -94,57 +87,46 @@ def _build(data_dir: Path, db_path: Path) -> None:
     q_count = 0
     mp_count = 0
 
-    for path in jsonl_files:
-        with path.open("r", encoding="utf-8") as f:
-            for line_no, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    typer.echo(f"  WARN: {path.name}:{line_no} bad JSON — {exc}")
-                    continue
+    for row in rows:
+        lok = row.get("lok_no")
+        sess = row.get("session_no")
+        qno = row.get("ques_no")
+        if lok is None or sess is None or qno is None:
+            continue
 
-                lok = rec.get("lok_no")
-                sess = rec.get("session_no")
-                qno = rec.get("ques_no")
-                if lok is None or sess is None or qno is None:
-                    continue
+        qtype = row.get("type")
 
+        conn.execute(
+            "INSERT OR REPLACE INTO questions "
+            "(lok_no, session_no, ques_no, type, date, ministry, subject, pdf_filename) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                lok,
+                sess,
+                qno,
+                qtype,
+                row.get("date"),  # already YYYY-MM-DD in the parquet
+                row.get("ministry"),
+                row.get("subject") or None,
+                _pdf_filename_from_url(row.get("pdf_url")),
+            ),
+        )
+        q_count += 1
+
+        # Delete existing MP rows for this question (idempotent on re-run)
+        conn.execute(
+            "DELETE FROM question_mps WHERE lok_no=? AND session_no=? AND type=? AND ques_no=?",
+            (lok, sess, qtype, qno),
+        )
+        for mp in row.get("members") or []:
+            mp = mp.strip()
+            if mp:
                 conn.execute(
-                    "INSERT OR REPLACE INTO questions "
-                    "(lok_no, session_no, ques_no, type, date, ministry, subject, pdf_filename) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        lok,
-                        sess,
-                        qno,
-                        rec.get("type"),
-                        _convert_date(rec.get("date")),
-                        rec.get("ministry"),
-                        (rec.get("subjects") or "").strip() or None,
-                        _pdf_filename_from_url(rec.get("questionsFilePath")),
-                    ),
+                    "INSERT INTO question_mps (lok_no, session_no, ques_no, type, mp_name) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (lok, sess, qno, qtype, mp),
                 )
-                q_count += 1
-
-                qtype = rec.get("type")
-
-                # Delete existing MP rows for this question (idempotent on re-run)
-                conn.execute(
-                    "DELETE FROM question_mps WHERE lok_no=? AND session_no=? AND type=? AND ques_no=?",
-                    (lok, sess, qtype, qno),
-                )
-                for mp in rec.get("members") or []:
-                    mp = mp.strip()
-                    if mp:
-                        conn.execute(
-                            "INSERT INTO question_mps (lok_no, session_no, ques_no, type, mp_name) "
-                            "VALUES (?, ?, ?, ?, ?)",
-                            (lok, sess, qno, qtype, mp),
-                        )
-                        mp_count += 1
+                mp_count += 1
 
     conn.commit()
     conn.close()
@@ -154,15 +136,17 @@ def _build(data_dir: Path, db_path: Path) -> None:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 @app.command()
 def build(
-    data_dir: Path = typer.Option(DEFAULT_DATA_DIR, "--data-dir", help="Root data directory containing lok subdirs"),
-    db_path: Optional[Path] = typer.Option(None, "--db-path", help=f"Output SQLite path (default: <data-dir>/metadata.db)"),
+    dataset: str = typer.Option(HF_DATASET_REPO, help="HuggingFace dataset repo ID"),
+    parquet: Optional[str] = typer.Option(None, help="Local parquet file (overrides --dataset)"),
+    db_path: Path = typer.Option(METADATA_DB_PATH, "--db-path", help="Output SQLite path"),
 ) -> None:
-    """Scan index JSONL files and build the metadata SQLite database."""
-    if db_path is None:
-        db_path = data_dir / "metadata.db"
-    _build(data_dir, db_path)
+    """Build the metadata SQLite database from the HuggingFace dataset."""
+    rows = _load_dataset(dataset, parquet)
+    typer.echo(f"Loaded {len(rows)} rows from dataset")
+    _build(rows, db_path)
 
 
 if __name__ == "__main__":

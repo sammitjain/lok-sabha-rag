@@ -635,7 +635,7 @@ function renderEvidenceCardsGrouped(evidenceGroups) {
                 <div class="card-meta">${metaText.map(t => `<span>${t}</span>`).join('')}</div>
                 <div class="card-footer">
                     <div class="card-secondary">${renderChipsHTML(secondaryChips)}</div>
-                    ${group.live_url ? `<a href="${group.live_url}" target="_blank" class="card-link" onclick="event.stopPropagation()">View PDF</a>` : ''}
+                    ${group.pdf_url ? `<a href="${group.pdf_url}" target="_blank" class="card-link" onclick="event.stopPropagation()">View PDF</a>` : ''}
                 </div>
             </div>
             <div class="card-expand">
@@ -710,7 +710,7 @@ function renderEvidenceCardsFlat(evidence) {
                 <div class="card-meta">${metaText.map(t => `<span>${t}</span>`).join('')}</div>
                 <div class="card-footer">
                     <div class="card-secondary">${renderChipsHTML(secondaryChips)}</div>
-                    ${group.live_url ? `<a href="${group.live_url}" target="_blank" class="card-link" onclick="event.stopPropagation()">View PDF</a>` : ''}
+                    ${group.pdf_url ? `<a href="${group.pdf_url}" target="_blank" class="card-link" onclick="event.stopPropagation()">View PDF</a>` : ''}
                 </div>
             </div>
             <div class="card-expand">
@@ -778,8 +778,8 @@ async function openModal(group) {
 
     elements.modalChips.innerHTML = chipsHTML;
 
-    if (group.live_url) {
-        elements.modalFooter.innerHTML = `<a href="${group.live_url}" target="_blank">View Original PDF &rarr;</a>`;
+    if (group.pdf_url) {
+        elements.modalFooter.innerHTML = `<a href="${group.pdf_url}" target="_blank">View Original PDF &rarr;</a>`;
     } else {
         elements.modalFooter.innerHTML = '';
     }

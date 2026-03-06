@@ -132,7 +132,7 @@ def synthesize(req: SynthesizeRequest) -> SynthesizeResponse:
             ministry=g.ministry,
             subject=g.subject,
             asked_by=g.asked_by,
-            live_url=g.live_url,
+            pdf_url=g.pdf_url,
             best_score=g.best_score,
             total_chunks_available=g.total_chunks_available,
             chunks=[

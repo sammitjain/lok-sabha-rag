@@ -68,10 +68,9 @@ def search(req: SearchRequest) -> SearchResponse:
             asked_by=item.asked_by,
             ministry=item.ministry,
             subject=item.subject,
-            pdf_relpath=item.pdf_relpath,
             pdf_filename=item.pdf_filename,
+            pdf_url=item.pdf_url,
             chunk_index=item.chunk_index,
-            live_url=item.live_url,
             text=item.text,
             text_preview=_truncate(item.text),
         )

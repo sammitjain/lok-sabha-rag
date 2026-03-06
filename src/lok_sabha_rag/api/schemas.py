@@ -24,10 +24,9 @@ class EvidenceItemResponse(BaseModel):
     asked_by: Optional[str]
     ministry: Optional[str]
     subject: Optional[str]
-    pdf_relpath: Optional[str]
     pdf_filename: Optional[str]
+    pdf_url: Optional[str]
     chunk_index: Optional[int]
-    live_url: Optional[str]
     text: str
     text_preview: str
 
@@ -69,7 +68,7 @@ class EvidenceGroupResponse(BaseModel):
     ministry: Optional[str]
     subject: Optional[str]
     asked_by: Optional[str]
-    live_url: Optional[str]
+    pdf_url: Optional[str]
     best_score: float
     chunks: List[ChunkDetail]
     total_chunks_available: int = Field(0, description="Total chunks before trimming")

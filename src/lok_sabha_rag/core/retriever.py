@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from collections import OrderedDict
 from dataclasses import dataclass, asdict, field
-from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from qdrant_client import QdrantClient, models
 
 from lok_sabha_rag.config import (
     QDRANT_HOST, QDRANT_PORT, QDRANT_COLLECTION,
-    EMBEDDING_MODEL, DATA_DIR,
+    EMBEDDING_MODEL,
 )
 
 
@@ -27,10 +25,9 @@ class EvidenceItem:
     asked_by: Optional[str]
     ministry: Optional[str]
     subject: Optional[str]
-    pdf_relpath: Optional[str]
     pdf_filename: Optional[str]
+    pdf_url: Optional[str]
     chunk_index: Optional[int]
-    live_url: Optional[str]
     text: str
 
 
@@ -45,7 +42,7 @@ class EvidenceGroup:
     ministry: Optional[str]
     subject: Optional[str]
     asked_by: Optional[str]
-    live_url: Optional[str]
+    pdf_url: Optional[str]
     best_score: float
     chunks: List[EvidenceItem] = field(default_factory=list)
     total_chunks_available: int = 0   # how many chunks existed before trimming
@@ -80,41 +77,32 @@ def _safe_str(x) -> Optional[str]:
     return s if s else None
 
 
-def _load_url_index(base_dir: str, lok: int, session: int) -> Dict[str, str]:
-    index_path = Path(base_dir) / str(lok) / f"index_session_{session}.jsonl"
-    mapping: Dict[str, str] = {}
-    if not index_path.exists():
-        return mapping
-    try:
-        with index_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                obj = json.loads(line)
-                url = obj.get("questionsFilePath")
-                if url:
-                    fname = url.split("/")[-1].split("?")[0]
-                    mapping[fname] = url
-    except Exception:
-        pass
-    return mapping
+def _extract_evidence(p, *, score: float = 0.0) -> EvidenceItem:
+    """Convert a Qdrant point to an EvidenceItem."""
+    pay = p.payload or {}
+    src = pay.get("source", {}) or {}
+
+    return EvidenceItem(
+        score=score,
+        chunk_id=str(pay.get("chunk_id") or p.id),
+        lok_no=int(pay["lok_no"]) if pay.get("lok_no") is not None else None,
+        session_no=int(pay["session_no"]) if pay.get("session_no") is not None else None,
+        ques_no=pay.get("ques_no"),
+        type=_safe_str(pay.get("type")),
+        asked_by=_safe_str(pay.get("mp_names")),
+        ministry=_safe_str(pay.get("ministry")),
+        subject=_safe_str(pay.get("subject")),
+        pdf_filename=_safe_str(src.get("pdf_filename")),
+        pdf_url=_safe_str(src.get("pdf_url")),
+        chunk_index=int(src["chunk_index"]) if src.get("chunk_index") is not None else None,
+        text=pay.get("text", ""),
+    )
 
 
 class Retriever:
-    def __init__(self, host: str = QDRANT_HOST, port: int = QDRANT_PORT, data_dir: str = str(DATA_DIR)):
+    def __init__(self, host: str = QDRANT_HOST, port: int = QDRANT_PORT):
         self.client = QdrantClient(host=host, port=port)
         self.model = EMBEDDING_MODEL
-        self.data_dir = data_dir
-        self._url_cache: Dict[tuple, Dict[str, str]] = {}
-
-    def _get_live_url(self, lok: int, session: int, pdf_filename: Optional[str]) -> Optional[str]:
-        if not pdf_filename:
-            return None
-        cache_key = (lok, session)
-        if cache_key not in self._url_cache:
-            self._url_cache[cache_key] = _load_url_index(self.data_dir, lok, session)
-        return self._url_cache[cache_key].get(pdf_filename)
 
     def search(
         self,
@@ -135,38 +123,7 @@ class Retriever:
             with_payload=True,
         ).points
 
-        items: List[EvidenceItem] = []
-        for p in points:
-            pay = p.payload or {}
-            src = pay.get("source", {}) or {}
-
-            l_no = int(pay["lok_no"]) if pay.get("lok_no") is not None else None
-            s_no = int(pay["session_no"]) if pay.get("session_no") is not None else None
-            pdf_filename = _safe_str(src.get("pdf_filename"))
-
-            live_url = None
-            if l_no is not None and s_no is not None:
-                live_url = self._get_live_url(l_no, s_no, pdf_filename)
-
-            items.append(
-                EvidenceItem(
-                    score=float(p.score),
-                    chunk_id=str(pay.get("chunk_id") or p.id),
-                    lok_no=l_no,
-                    session_no=s_no,
-                    ques_no=pay.get("ques_no"),
-                    type=_safe_str(pay.get("type")),
-                    asked_by=_safe_str(pay.get("mp_names")),
-                    ministry=_safe_str(pay.get("ministry")),
-                    subject=_safe_str(pay.get("subject") or pay.get("subjects")),
-                    pdf_relpath=_safe_str(src.get("pdf_relpath")),
-                    pdf_filename=pdf_filename,
-                    chunk_index=int(src["chunk_index"]) if src.get("chunk_index") is not None else None,
-                    live_url=live_url,
-                    text=pay.get("text", ""),
-                )
-            )
-        return items
+        return [_extract_evidence(p, score=float(p.score)) for p in points]
 
     def build_context(self, items: List[EvidenceItem]) -> str:
         parts = ["EVIDENCE (verbatim chunks; cite as [E#]):"]
@@ -225,35 +182,7 @@ class Retriever:
             with_payload=True,
         )
 
-        items: List[EvidenceItem] = []
-        for p in points:
-            pay = p.payload or {}
-            src = pay.get("source", {}) or {}
-            l_no = int(pay["lok_no"]) if pay.get("lok_no") is not None else None
-            s_no = int(pay["session_no"]) if pay.get("session_no") is not None else None
-            pdf_filename = _safe_str(src.get("pdf_filename"))
-
-            live_url = None
-            if l_no is not None and s_no is not None:
-                live_url = self._get_live_url(l_no, s_no, pdf_filename)
-
-            items.append(EvidenceItem(
-                score=0.0,  # not from vector search; no relevance score
-                chunk_id=str(pay.get("chunk_id") or p.id),
-                lok_no=l_no,
-                session_no=s_no,
-                ques_no=pay.get("ques_no"),
-                type=_safe_str(pay.get("type")),
-                asked_by=_safe_str(pay.get("mp_names")),
-                ministry=_safe_str(pay.get("ministry")),
-                subject=_safe_str(pay.get("subject") or pay.get("subjects")),
-                pdf_relpath=_safe_str(src.get("pdf_relpath")),
-                pdf_filename=pdf_filename,
-                chunk_index=int(src["chunk_index"]) if src.get("chunk_index") is not None else None,
-                live_url=live_url,
-                text=pay.get("text", ""),
-            ))
-
+        items = [_extract_evidence(p) for p in points]
         items.sort(key=lambda c: c.chunk_index or 0)
         return items
 
@@ -312,7 +241,7 @@ class Retriever:
                 ministry=best.ministry,
                 subject=best.subject,
                 asked_by=best.asked_by,
-                live_url=best.live_url,
+                pdf_url=best.pdf_url,
                 best_score=best.score,
                 chunks=sorted(chunk_list, key=lambda c: c.chunk_index or 0),
                 total_chunks_available=0,  # filled below if C is set
