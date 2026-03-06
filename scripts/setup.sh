@@ -42,7 +42,7 @@ for i in $(seq 1 30); do
 done
 echo ""
 
-# 5. Restore snapshot (or re-embed from sample chunks as fallback)
+# 5. Build chunks from HuggingFace dataset, metadata DB, and embed into Qdrant
 SNAPSHOT_FILE=$(find data/snapshots -name '*.snapshot' 2>/dev/null | head -1)
 
 if [ -n "$SNAPSHOT_FILE" ]; then
@@ -56,15 +56,28 @@ if [ -n "$SNAPSHOT_FILE" ]; then
     if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
         echo "Snapshot restored successfully."
     else
-        echo "Snapshot restore failed (HTTP $HTTP_CODE). Falling back to re-embed..."
-        echo "Embedding sample chunks into Qdrant (this downloads the model on first run)..."
-        uv run python -m lok_sabha_rag.pipeline.embed_index_qdrant2 --data-dir data/sample --collection "$COLLECTION"
+        echo "Snapshot restore failed (HTTP $HTTP_CODE). Falling back to sample build..."
+        echo ""
+        echo "Building sample chunks from HuggingFace dataset (50 questions)..."
+        uv run python -m lok_sabha_rag.pipeline.build_chunks_bge --max-files 50 --data-dir data/sample
+        echo ""
+        echo "Embedding sample chunks into Qdrant (downloads model on first run, ~50 MB)..."
+        uv run python -m lok_sabha_rag.pipeline.embed --data-dir data/sample --collection "$COLLECTION" --overwrite
     fi
 else
-    echo "No snapshot found. Embedding sample chunks into Qdrant..."
-    echo "(This downloads the embedding model on first run, ~50 MB.)"
-    uv run python -m lok_sabha_rag.pipeline.embed_index_qdrant2 --data-dir data/sample --collection "$COLLECTION"
+    echo "No snapshot found. Building sample dataset..."
+    echo ""
+    echo "Building sample chunks from HuggingFace dataset (50 questions)..."
+    uv run python -m lok_sabha_rag.pipeline.build_chunks_bge --max-files 50 --data-dir data/sample
+    echo ""
+    echo "Embedding sample chunks into Qdrant (downloads model on first run, ~50 MB)..."
+    uv run python -m lok_sabha_rag.pipeline.embed --data-dir data/sample --collection "$COLLECTION" --overwrite
 fi
+echo ""
+
+# 6. Build metadata DB
+echo "Building metadata database..."
+uv run python -m lok_sabha_rag.pipeline.build_metadata_db
 echo ""
 
 echo "=== Setup complete ==="
