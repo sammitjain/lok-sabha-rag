@@ -39,6 +39,8 @@ data/*/failed_downloads.txt
 data/*/failed_parse.txt
 data/*/unmatched_ministries.txt
 data/*/unmatched_ministries_examples.jsonl
+# Sample data (built locally for snapshot creation)
+data/sample/
 # Audit / debug outputs
 data/_question_text_audit/
 
