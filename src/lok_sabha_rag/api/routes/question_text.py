@@ -14,9 +14,10 @@ _retriever = Retriever()
 
 
 class QuestionTextRequest(BaseModel):
-    lok_no: int
-    session_no: int
-    ques_no: int
+    question_id: str | None = Field(None, description="Stable composite key (preferred)")
+    lok_no: int | None = None
+    session_no: int | None = None
+    ques_no: int | None = None
     type: str | None = Field(None, description="'Starred' or 'Unstarred' — disambiguates overlapping ques_no ranges")
     c: int = Field(1, ge=1, le=10, description="Number of leading chunks to fetch (chunk_index 0..c-1)")
 
@@ -33,28 +34,24 @@ def question_text(req: QuestionTextRequest) -> QuestionTextResponse:
     always the true document-order leading chunks, regardless of what was retrieved
     during the original search.
 
-    Header (metadata prefix prepended by the chunker) is shown once (from the first
-    chunk); subsequent chunks have their header stripped so body text flows cleanly.
+    Accepts either question_id (preferred) or the legacy lok_no/session_no/ques_no fields.
     """
     chunks = _retriever._fetch_leading_chunks(
-        req.lok_no, req.session_no, req.ques_no, req.c, qtype=req.type,
+        c=req.c,
+        question_id=req.question_id,
+        lok_no=req.lok_no,
+        session_no=req.session_no,
+        ques_no=req.ques_no,
+        qtype=req.type,
     )
 
     if not chunks:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No chunks found for Lok {req.lok_no} Session {req.session_no} Q{req.ques_no}",
+        detail = f"No chunks found for question_id={req.question_id}" if req.question_id else (
+            f"No chunks found for Lok {req.lok_no} Session {req.session_no} Q{req.ques_no}"
         )
+        raise HTTPException(status_code=404, detail=detail)
 
-    parts: list[str] = []
-    for i, chunk in enumerate(chunks):
-        text = chunk.text or ""
-        if i == 0:
-            # First chunk: keep the metadata header intact
-            parts.append(text)
-        else:
-            # Subsequent chunks: strip the header (everything up to first blank line)
-            sep = text.find("\n\n")
-            parts.append(text[sep + 2:] if sep != -1 else text)
+    # Join chunk texts — body only (no header to strip since chunks are pure body now)
+    parts = [chunk.text or "" for chunk in chunks]
 
     return QuestionTextResponse(text="\n\n".join(parts))

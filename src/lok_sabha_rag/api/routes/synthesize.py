@@ -125,6 +125,7 @@ def synthesize(req: SynthesizeRequest) -> SynthesizeResponse:
     evidence_groups = [
         EvidenceGroupResponse(
             group_index=g.group_index,
+            question_id=g.question_id,
             lok_no=g.lok_no,
             session_no=g.session_no,
             ques_no=g.ques_no,

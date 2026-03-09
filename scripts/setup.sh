@@ -59,7 +59,7 @@ if [ -n "$SNAPSHOT_FILE" ]; then
         echo "Snapshot restore failed (HTTP $HTTP_CODE). Falling back to sample build..."
         echo ""
         echo "Building sample chunks from HuggingFace dataset (50 questions)..."
-        uv run python -m lok_sabha_rag.pipeline.build_chunks_bge --max-files 50 --data-dir data/sample
+        uv run python -m lok_sabha_rag.pipeline.build_chunks --max-files 50 --data-dir data/sample
         echo ""
         echo "Embedding sample chunks into Qdrant (downloads model on first run, ~50 MB)..."
         uv run python -m lok_sabha_rag.pipeline.embed --data-dir data/sample --collection "$COLLECTION" --overwrite
@@ -68,7 +68,7 @@ else
     echo "No snapshot found. Building sample dataset..."
     echo ""
     echo "Building sample chunks from HuggingFace dataset (50 questions)..."
-    uv run python -m lok_sabha_rag.pipeline.build_chunks_bge --max-files 50 --data-dir data/sample
+    uv run python -m lok_sabha_rag.pipeline.build_chunks --max-files 50 --data-dir data/sample
     echo ""
     echo "Embedding sample chunks into Qdrant (downloads model on first run, ~50 MB)..."
     uv run python -m lok_sabha_rag.pipeline.embed --data-dir data/sample --collection "$COLLECTION" --overwrite

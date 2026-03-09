@@ -1,6 +1,7 @@
 console.log('app.js loaded');
 const API_BASE = '/api';
-const LOK_NO = 18; // MVP: hardcoded to Lok Sabha 18
+// LOK_NO kept for any remaining per-lok references; MP list now loads from combined endpoint
+const LOK_NO = 18;
 
 // Feature flag: clean card text display
 // When true: show only first C chunks per card, strip repeated headers (header shown once at top)
@@ -50,7 +51,7 @@ let mpFilter = null;      // currently selected MP name for Qdrant filtering
 
 async function loadMpList() {
     try {
-        const res = await fetch(`${API_BASE}/members/${LOK_NO}`);
+        const res = await fetch(`${API_BASE}/members`);
         if (res.ok) {
             mpList = await res.json();
             console.log(`Loaded ${mpList.length} MP names for autocomplete`);
@@ -569,18 +570,22 @@ function getCombinedText(chunks) {
 // Fetch the absolute leading C chunks for a question from the backend.
 // Uses a module-level cache so repeated opens/expands don't re-fetch.
 async function fetchQuestionText(group, c) {
-    const key = `${group.lok_no}-${group.session_no}-${group.type || ''}-${group.ques_no}-c${c}`;
+    const key = group.question_id
+        ? `${group.question_id}-c${c}`
+        : `${group.lok_no}-${group.session_no}-${group.type || ''}-${group.ques_no}-c${c}`;
     if (_questionTextCache.has(key)) {
         return _questionTextCache.get(key);
     }
     try {
-        const payload = {
-            lok_no: group.lok_no,
-            session_no: group.session_no,
-            ques_no: group.ques_no,
-            c,
-        };
-        if (group.type) payload.type = group.type;
+        const payload = { c };
+        if (group.question_id) {
+            payload.question_id = group.question_id;
+        } else {
+            payload.lok_no = group.lok_no;
+            payload.session_no = group.session_no;
+            payload.ques_no = group.ques_no;
+            if (group.type) payload.type = group.type;
+        }
 
         const res = await fetch(`${API_BASE}/question-text`, {
             method: 'POST',

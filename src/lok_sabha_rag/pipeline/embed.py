@@ -37,9 +37,27 @@ logger = logging.getLogger(__name__)
 
 
 def discover_chunks_files(data_dir: Path) -> List[Path]:
-    """Find all chunks.jsonl files under data_dir recursively."""
-    return sorted(data_dir.rglob("chunks.jsonl"))
-
+    """Find all chunks.jsonl files under data_dir recursively.
+    
+    Ignores files inside 'sample' or 'test' subdirectories UNLESS the 
+    data_dir itself is already inside one of those directories.
+    """
+    all_files = data_dir.rglob("chunks.jsonl")
+    filtered = []
+    
+    for f in all_files:
+        # Get the path segments that exist BELOW the provided data_dir
+        # e.g., if data_dir is 'data/' and f is 'data/sample/18/chunks.jsonl',
+        # rel_parts will be ('sample', '18', 'chunks.jsonl')
+        rel_parts = f.relative_to(data_dir).parts
+        
+        # Skip if 'sample' or 'test' is a SUB-DIRECTORY of our search root
+        if any(p in {"sample", "test"} for p in rel_parts):
+            continue
+            
+        filtered.append(f)
+        
+    return sorted(filtered)
 
 def build_payload(record: Dict[str, Any]) -> Dict[str, Any]:
     """Build Qdrant payload from chunk record, including full text."""
@@ -64,6 +82,7 @@ def build_payload(record: Dict[str, Any]) -> Dict[str, Any]:
         "pdf_filename": source.get("pdf_filename"),
         "pdf_url": source.get("pdf_url"),
         "chunk_index": source.get("chunk_index"),
+        "question_id": meta.get("question_id") or record.get("question_id"),
     }
 
 
@@ -80,6 +99,16 @@ def ensure_collection(client: QdrantClient, model_name: str, collection: str) ->
             size=size,
             distance=models.Distance.COSINE,
         ),
+        optimizers_config=models.OptimizersConfigDiff(
+            indexing_threshold=100,  # KB; index even small segments
+        ),
+    )
+
+    # Keyword index on question_id for fast scroll/count/grouping
+    client.create_payload_index(
+        collection_name=collection,
+        field_name="question_id",
+        field_schema=models.PayloadSchemaType.KEYWORD,
     )
 
 

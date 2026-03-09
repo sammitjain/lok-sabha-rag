@@ -17,6 +17,7 @@ class EvidenceItemResponse(BaseModel):
     index: int
     score: float
     chunk_id: str
+    question_id: Optional[str] = None
     lok_no: Optional[int]
     session_no: Optional[int]
     ques_no: Optional[int]
@@ -61,6 +62,7 @@ class ChunkDetail(BaseModel):
 class EvidenceGroupResponse(BaseModel):
     """A group of chunks from the same parliamentary question."""
     group_index: int
+    question_id: Optional[str] = None
     lok_no: Optional[int]
     session_no: Optional[int]
     ques_no: Optional[int]
@@ -92,4 +94,53 @@ class SynthesizeResponse(BaseModel):
     evidence_groups: List[EvidenceGroupResponse]
     total_chunks: int
     mp_stats: Optional[MpStatsResponse] = None
+
+
+# ── Debug / Trace models ──────────────────────────────────────────────
+
+
+class TraceChunk(BaseModel):
+    """Single chunk with full metadata for trace output."""
+    chunk_id: str
+    question_id: Optional[str] = None
+    chunk_index: Optional[int]
+    score: float
+    lok_no: Optional[int]
+    session_no: Optional[int]
+    ques_no: Optional[int]
+    type: Optional[str]
+    ministry: Optional[str]
+    asked_by: Optional[str]
+    subject: Optional[str]
+    pdf_url: Optional[str]
+    text: str
+
+
+class TraceGroup(BaseModel):
+    """Question group in trace output."""
+    group_key: str
+    question_id: Optional[str] = None
+    lok_no: Optional[int]
+    session_no: Optional[int]
+    ques_no: Optional[int]
+    type: Optional[str]
+    ministry: Optional[str]
+    subject: Optional[str]
+    asked_by: Optional[str]
+    pdf_url: Optional[str]
+    best_score: float
+    chunk_count: int
+    total_chunks_available: int = 0
+    chunks: List[TraceChunk]
+
+
+class TraceResponse(BaseModel):
+    """Full pipeline trace — every intermediate stage as JSON."""
+    input: dict
+    vector_search: dict
+    grouping: dict
+    c_chunk_fetch: dict
+    mp_stats: Optional[dict] = None
+    evidence_context: str
+    prompt: dict
 

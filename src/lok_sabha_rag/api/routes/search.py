@@ -61,6 +61,7 @@ def search(req: SearchRequest) -> SearchResponse:
             index=i,
             score=item.score,
             chunk_id=item.chunk_id,
+            question_id=item.question_id,
             lok_no=item.lok_no,
             session_no=item.session_no,
             ques_no=item.ques_no,

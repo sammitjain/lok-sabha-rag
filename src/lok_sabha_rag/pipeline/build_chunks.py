@@ -7,14 +7,16 @@ Output:
 - Chunks JSONL: data/<lok>/<chunks/session_<n>/chunks.jsonl
 
 Features:
-- Uses 'BAAI/bge-small-en-v1.5' tokenizer for exact token counts.
-- Prepends a structured context header to every chunk.
-- Reads from HF dataset by default; supports a local parquet override.
+- Model-agnostic: uses whichever HuggingFace model tokenizer you specify.
+- Chunk text is pure body content (no metadata header) — metadata lives
+  in structured fields for filtering/grouping.
+- Each chunk carries a stable `question_id` for efficient grouping and scroll.
 
 Usage:
-  uv run python -m lok_sabha_rag.pipeline.build_chunks_bge
-  uv run python -m lok_sabha_rag.pipeline.build_chunks_bge --parquet /path/to/local.parquet
-  uv run python -m lok_sabha_rag.pipeline.build_chunks_bge --max-files 10
+  uv run python -m lok_sabha_rag.pipeline.build_chunks
+  uv run python -m lok_sabha_rag.pipeline.build_chunks --parquet /path/to/local.parquet
+  uv run python -m lok_sabha_rag.pipeline.build_chunks --max-files 10
+  uv run python -m lok_sabha_rag.pipeline.build_chunks --model sentence-transformers/all-MiniLM-L6-v2
 """
 
 from __future__ import annotations
@@ -32,12 +34,9 @@ import typer
 from tokenizers import Tokenizer
 from huggingface_hub import hf_hub_download
 
-from lok_sabha_rag.config import DATA_DIR, HF_DATASET_REPO
+from lok_sabha_rag.config import DATA_DIR, HF_DATASET_REPO, EMBEDDING_MODEL
 
 app = typer.Typer(no_args_is_help=True)
-
-# 2026 Standard for lightweight RAG
-MODEL_NAME = "BAAI/bge-small-en-v1.5"
 
 
 def _pdf_filename_from_url(url: str | None) -> str | None:
@@ -59,35 +58,9 @@ def _chunk_id(*parts: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
-def _make_header(row: dict) -> str:
-    MAX_NAMES = 3
-
-    members = row.get("members") or []
-    members = [m.strip() for m in members if m.strip()]
-
-    if members:
-        if len(members) > MAX_NAMES:
-            shown = members[:MAX_NAMES]
-            remaining = len(members) - MAX_NAMES
-            members_str = f"{', '.join(shown)} + {remaining} more"
-        else:
-            members_str = ", ".join(members)
-        asked_by_line = f"Asked by: {members_str}"
-    else:
-        asked_by_line = None
-
-    lines = [
-        f"Lok Sabha: {row.get('lok_no')} | Session: {row.get('session_no')} | Q: {row.get('ques_no')} | {row.get('type')} | Date: {row.get('date')}",
-        f"Ministry: {row.get('ministry')}",
-    ]
-
-    if asked_by_line:
-        lines.append(asked_by_line)
-
-    lines.append(f"Subject: {row.get('subject')}")
-    lines.append("---")
-
-    return "\n".join(lines)
+def _question_id(row: dict) -> str:
+    """Stable composite key for a parliamentary question."""
+    return f"{row.get('lok_no')}_{row.get('session_no')}_{row.get('ques_no')}_{row.get('type')}"
 
 
 def _soft_split(text: str, max_chars: int, overlap: int) -> List[str]:
@@ -110,14 +83,13 @@ def _split_with_tokenizer(
     text: str,
     tokenizer: Tokenizer,
     max_tokens: int,
-    header_tokens: int,
     overlap_chars: int,
 ) -> List[str]:
     """Splits text ensuring strict token limits, falling back to char split if needed."""
-    available_tokens = max_tokens - header_tokens - 5  # 5 token buffer
+    available_tokens = max_tokens - 5  # 5 token buffer
 
     if available_tokens <= 50:
-        available_tokens = 200  # Emergency fallback if header is huge
+        available_tokens = 200  # Emergency fallback
 
     paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     chunks = []
@@ -181,13 +153,14 @@ def run(
     dataset: str = typer.Option(HF_DATASET_REPO, help="HuggingFace dataset repo ID"),
     parquet: Optional[str] = typer.Option(None, help="Local parquet file (overrides --dataset)"),
     data_dir: str = typer.Option(str(DATA_DIR), "--data-dir", help="Output directory for chunks"),
-    max_tokens: int = typer.Option(500, help="Strict max tokens per chunk (model limit is 512)."),
+    model: str = typer.Option(EMBEDDING_MODEL, help="HuggingFace model (used for tokenizer)"),
+    max_tokens: int = typer.Option(500, help="Strict max tokens per chunk (model limit is 512 for bge)."),
     overlap_chars: int = typer.Option(300, help="Overlap for soft splitting massive paragraphs."),
     overwrite: bool = typer.Option(False, help="Overwrite existing chunks.jsonl"),
     max_files: Optional[int] = typer.Option(None, help="Testing limit (max questions to process)"),
 ) -> None:
-    print(f"Loading tokenizer for {MODEL_NAME}...")
-    tokenizer_path = hf_hub_download(repo_id=MODEL_NAME, filename="tokenizer.json")
+    print(f"Loading tokenizer for {model}...")
+    tokenizer_path = hf_hub_download(repo_id=model, filename="tokenizer.json")
     hf_tokenizer = Tokenizer.from_file(tokenizer_path)
 
     rows = _load_dataset(dataset, parquet)
@@ -234,24 +207,22 @@ def run(
 
                     pdf_filename = _pdf_filename_from_url(row.get("pdf_url"))
                     lok_no = row.get("lok_no")
-
-                    header = _make_header(row)
-                    header_token_count = len(hf_tokenizer.encode(header, add_special_tokens=False).ids)
+                    qid = _question_id(row)
 
                     body_chunks = _split_with_tokenizer(
                         text=body,
                         tokenizer=hf_tokenizer,
                         max_tokens=max_tokens,
-                        header_tokens=header_token_count,
                         overlap_chars=overlap_chars,
                     )
 
                     for i, b in enumerate(body_chunks):
-                        text = f"{header}\n\n{b}".strip()
+                        text = b.strip()
                         cid = _chunk_id(str(lok_no), str(sess), pdf_filename or "", str(i), text[:100])
 
                         rec = {
                             "chunk_id": cid,
+                            "question_id": qid,
                             "text": text,
                             "source": {
                                 "pdf_filename": pdf_filename,
@@ -267,9 +238,10 @@ def run(
                                 "ministry": row.get("ministry"),
                                 "mp_names": row.get("members"),
                                 "subject": row.get("subject"),
+                                "question_id": qid,
                             },
                             "pipeline": {
-                                "model": MODEL_NAME,
+                                "model": model,
                                 "max_tokens": max_tokens,
                             },
                         }
@@ -277,10 +249,10 @@ def run(
                         chunk_count += 1
 
                 except Exception as e:
-                    qid = row.get("id", "unknown")
-                    print(f"[error] {qid} -> {e}")
+                    row_id = row.get("id", "unknown")
+                    print(f"[error] {row_id} -> {e}")
                     with failed_log.open("a", encoding="utf-8") as f:
-                        f.write(f"{sess}\t{qid}\t{repr(e)}\n")
+                        f.write(f"{sess}\t{row_id}\t{repr(e)}\n")
 
                 if total_processed % 500 == 0:
                     gc.collect()

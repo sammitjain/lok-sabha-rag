@@ -18,6 +18,7 @@ from lok_sabha_rag.config import (
 class EvidenceItem:
     score: float
     chunk_id: str
+    question_id: Optional[str]
     lok_no: Optional[int]
     session_no: Optional[int]
     ques_no: Optional[int]
@@ -35,6 +36,7 @@ class EvidenceItem:
 class EvidenceGroup:
     """A group of chunks from the same parliamentary question."""
     group_index: int
+    question_id: Optional[str]
     lok_no: Optional[int]
     session_no: Optional[int]
     ques_no: Optional[int]
@@ -85,6 +87,7 @@ def _extract_evidence(p, *, score: float = 0.0) -> EvidenceItem:
     return EvidenceItem(
         score=score,
         chunk_id=str(pay.get("chunk_id") or p.id),
+        question_id=_safe_str(pay.get("question_id")),
         lok_no=int(pay["lok_no"]) if pay.get("lok_no") is not None else None,
         session_no=int(pay["session_no"]) if pay.get("session_no") is not None else None,
         ques_no=pay.get("ques_no"),
@@ -100,9 +103,15 @@ def _extract_evidence(p, *, score: float = 0.0) -> EvidenceItem:
 
 
 class Retriever:
-    def __init__(self, host: str = QDRANT_HOST, port: int = QDRANT_PORT):
+    def __init__(
+        self,
+        host: str = QDRANT_HOST,
+        port: int = QDRANT_PORT,
+        collection: str = QDRANT_COLLECTION,
+    ):
         self.client = QdrantClient(host=host, port=port)
         self.model = EMBEDDING_MODEL
+        self.collection = collection
 
     def search(
         self,
@@ -116,11 +125,12 @@ class Retriever:
         query_filter = _build_filter(lok=lok, session=session, ministry=ministry, mp_names=mp_names)
 
         points = self.client.query_points(
-            collection_name=QDRANT_COLLECTION,
+            collection_name=self.collection,
             query=models.Document(text=query, model=self.model),
             limit=top_k,
             query_filter=query_filter,
             with_payload=True,
+            search_params=models.SearchParams(hnsw_ef=256),
         ).points
 
         return [_extract_evidence(p, score=float(p.score)) for p in points]
@@ -148,36 +158,42 @@ class Retriever:
 
     def _fetch_leading_chunks(
         self,
-        lok_no: int,
-        session_no: int,
-        ques_no: int,
         c: int,
+        question_id: Optional[str] = None,
+        lok_no: Optional[int] = None,
+        session_no: Optional[int] = None,
+        ques_no: Optional[int] = None,
         qtype: Optional[str] = None,
     ) -> List[EvidenceItem]:
         """Fetch the first C chunks (by chunk_index) for a specific question
         directly from Qdrant using metadata scroll, regardless of vector search.
 
-        Args:
-            qtype: "Starred" or "Unstarred" — disambiguates questions that share
-                   the same (lok_no, session_no, ques_no) across question types.
+        Prefers single-field question_id filter; falls back to 4-field composite.
         """
-        must = [
-            models.FieldCondition(key="lok_no", match=models.MatchValue(value=lok_no)),
-            models.FieldCondition(key="session_no", match=models.MatchValue(value=session_no)),
-            models.FieldCondition(key="ques_no", match=models.MatchValue(value=ques_no)),
-            models.FieldCondition(
-                key="source.chunk_index",
-                range=models.Range(gte=0, lt=c),
-            ),
-        ]
-        if qtype:
-            must.append(models.FieldCondition(key="type", match=models.MatchValue(value=qtype)))
-
-        scroll_filter = models.Filter(must=must)
+        if question_id:
+            must = [
+                models.FieldCondition(key="question_id", match=models.MatchValue(value=question_id)),
+                models.FieldCondition(
+                    key="source.chunk_index",
+                    range=models.Range(gte=0, lt=c),
+                ),
+            ]
+        else:
+            must = [
+                models.FieldCondition(key="lok_no", match=models.MatchValue(value=lok_no)),
+                models.FieldCondition(key="session_no", match=models.MatchValue(value=session_no)),
+                models.FieldCondition(key="ques_no", match=models.MatchValue(value=ques_no)),
+                models.FieldCondition(
+                    key="source.chunk_index",
+                    range=models.Range(gte=0, lt=c),
+                ),
+            ]
+            if qtype:
+                must.append(models.FieldCondition(key="type", match=models.MatchValue(value=qtype)))
 
         points, _ = self.client.scroll(
-            collection_name=QDRANT_COLLECTION,
-            scroll_filter=scroll_filter,
+            collection_name=self.collection,
+            scroll_filter=models.Filter(must=must),
             limit=c,
             with_payload=True,
         )
@@ -187,22 +203,30 @@ class Retriever:
         return items
 
     def _count_total_chunks(
-        self, lok_no: int, session_no: int, ques_no: int,
+        self,
+        question_id: Optional[str] = None,
+        lok_no: Optional[int] = None,
+        session_no: Optional[int] = None,
+        ques_no: Optional[int] = None,
         qtype: Optional[str] = None,
     ) -> int:
         """Count total chunks for a question in Qdrant."""
-        must = [
-            models.FieldCondition(key="lok_no", match=models.MatchValue(value=lok_no)),
-            models.FieldCondition(key="session_no", match=models.MatchValue(value=session_no)),
-            models.FieldCondition(key="ques_no", match=models.MatchValue(value=ques_no)),
-        ]
-        if qtype:
-            must.append(models.FieldCondition(key="type", match=models.MatchValue(value=qtype)))
+        if question_id:
+            must = [
+                models.FieldCondition(key="question_id", match=models.MatchValue(value=question_id)),
+            ]
+        else:
+            must = [
+                models.FieldCondition(key="lok_no", match=models.MatchValue(value=lok_no)),
+                models.FieldCondition(key="session_no", match=models.MatchValue(value=session_no)),
+                models.FieldCondition(key="ques_no", match=models.MatchValue(value=ques_no)),
+            ]
+            if qtype:
+                must.append(models.FieldCondition(key="type", match=models.MatchValue(value=qtype)))
 
-        count_filter = models.Filter(must=must)
         result = self.client.count(
-            collection_name=QDRANT_COLLECTION,
-            count_filter=count_filter,
+            collection_name=self.collection,
+            count_filter=models.Filter(must=must),
             exact=True,
         )
         return result.count
@@ -213,7 +237,7 @@ class Retriever:
         top_n: Optional[int] = None,
         chunks_per_question: Optional[int] = None,
     ) -> List[EvidenceGroup]:
-        """Group flat evidence items by (lok_no, session_no, type, ques_no).
+        """Group flat evidence items by question_id (or 4-tuple fallback).
 
         Args:
             items: Flat list of evidence chunks from search.
@@ -223,17 +247,18 @@ class Retriever:
                    (chunk_index 0..C-1) directly from Qdrant. None means use
                    whatever chunks were retrieved by vector search.
         """
-        groups: OrderedDict[tuple, List[EvidenceItem]] = OrderedDict()
+        groups: OrderedDict[str, List[EvidenceItem]] = OrderedDict()
         for item in items:
-            key = (item.lok_no, item.session_no, item.type, item.ques_no)
+            key = item.question_id or f"{item.lok_no}_{item.session_no}_{item.ques_no}_{item.type}"
             groups.setdefault(key, []).append(item)
 
         result: List[EvidenceGroup] = []
-        for idx, ((lok, sess, qtype, qno), chunk_list) in enumerate(groups.items(), start=1):
+        for idx, (key, chunk_list) in enumerate(groups.items(), start=1):
             best = max(chunk_list, key=lambda c: c.score)
 
             result.append(EvidenceGroup(
                 group_index=idx,
+                question_id=best.question_id,
                 lok_no=best.lok_no,
                 session_no=best.session_no,
                 ques_no=best.ques_no,
@@ -255,19 +280,25 @@ class Retriever:
         # For each kept question, fetch the guaranteed first C chunks from Qdrant
         if chunks_per_question is not None:
             for g in result:
-                if g.lok_no is not None and g.session_no is not None and g.ques_no is not None:
-                    total = self._count_total_chunks(
-                        g.lok_no, g.session_no, g.ques_no, qtype=g.type,
-                    )
-                    g.total_chunks_available = total
-                    leading = self._fetch_leading_chunks(
-                        g.lok_no, g.session_no, g.ques_no, chunks_per_question,
-                        qtype=g.type,
-                    )
-                    if leading:
-                        # Carry over the best vector-search score for ranking display
-                        g.chunks = leading
-                    # If fetch failed, keep original chunks as fallback
+                total = self._count_total_chunks(
+                    question_id=g.question_id,
+                    lok_no=g.lok_no,
+                    session_no=g.session_no,
+                    ques_no=g.ques_no,
+                    qtype=g.type,
+                )
+                g.total_chunks_available = total
+                leading = self._fetch_leading_chunks(
+                    c=chunks_per_question,
+                    question_id=g.question_id,
+                    lok_no=g.lok_no,
+                    session_no=g.session_no,
+                    ques_no=g.ques_no,
+                    qtype=g.type,
+                )
+                if leading:
+                    g.chunks = leading
+                # If fetch failed, keep original chunks as fallback
 
         # Re-assign group_index after trimming so citations are 1..N
         for i, g in enumerate(result, start=1):

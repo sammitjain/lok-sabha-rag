@@ -49,7 +49,7 @@ docker compose up -d               # start Qdrant on localhost:6333
 
 # Restore Qdrant snapshot (ships a starter collection)
 # OR build from HuggingFace dataset:
-uv run python -m lok_sabha_rag.pipeline.build_chunks_bge --max-files 50 --data-dir data/sample
+uv run python -m lok_sabha_rag.pipeline.build_chunks --max-files 50 --data-dir data/sample
 uv run python -m lok_sabha_rag.pipeline.embed --data-dir data/sample
 
 # Start server
@@ -80,7 +80,7 @@ This repo handles the **downstream** RAG pipeline — chunking and embedding. Th
 
 ```
 HuggingFace dataset (opensansad/lok-sabha-qa)
-  → build_chunks_bge.py   # tokenizer-aware splitting (BGE tokenizer, 500 token max)
+  → build_chunks.py   # tokenizer-aware splitting (model-agnostic, 500 token default)
   → embed.py              # embed with FastEmbed, upsert to Qdrant
 ```
 

@@ -6,7 +6,7 @@ for lightweight embedding and indexing.
 
 Prerequisites:
     First build chunks from the HF dataset:
-    uv run python -m lok_sabha_rag.pipeline.build_chunks_bge
+    uv run python -m lok_sabha_rag.pipeline.build_chunks
 
 Usage:
     uv run python scripts/create_sample_data.py
@@ -40,7 +40,7 @@ def create_sample(
 
     if not chunks_path.exists():
         typer.echo(f"Error: chunks file not found: {chunks_path}")
-        typer.echo("Run 'uv run python -m lok_sabha_rag.pipeline.build_chunks_bge' first.")
+        typer.echo("Run 'uv run python -m lok_sabha_rag.pipeline.build_chunks' first.")
         raise typer.Exit(1)
 
     # Scan chunks, collect first N unique questions
