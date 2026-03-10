@@ -7,8 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from lok_sabha_rag.core.stats import get_mp_stats
-from lok_sabha_rag.api.schemas import MpStatsResponse
+from lok_sabha_rag.core.stats import get_mp_stats, get_ministry_stats
+from lok_sabha_rag.api.schemas import MpStatsResponse, MinistryStatsResponse
 
 router = APIRouter()
 
@@ -32,6 +32,41 @@ def mp_stats(req: MpStatsRequest) -> MpStatsResponse:
         by_type=stats.by_type,
         top_ministries=[
             {"ministry": m, "count": c} for m, c in stats.by_ministry
+        ],
+        recent_questions=[
+            {
+                "lok_no": q.lok_no,
+                "session_no": q.session_no,
+                "ques_no": q.ques_no,
+                "type": q.type,
+                "date": q.date,
+                "ministry": q.ministry,
+                "subject": q.subject,
+            }
+            for q in stats.recent_questions
+        ],
+    )
+
+
+class MinistryStatsRequest(BaseModel):
+    ministry: str = Field(..., min_length=1)
+    top_q: int = Field(10, ge=1, le=50)
+
+
+@router.post("/ministry-stats", response_model=MinistryStatsResponse)
+def ministry_stats(req: MinistryStatsRequest) -> MinistryStatsResponse:
+    stats = get_ministry_stats(req.ministry, top_q=req.top_q)
+    if not stats:
+        raise HTTPException(status_code=404, detail=f"No questions found for '{req.ministry}'")
+
+    return MinistryStatsResponse(
+        ministry=stats.ministry,
+        total_questions=stats.total_questions,
+        by_lok=stats.by_lok,
+        by_session=stats.by_session,
+        by_type=stats.by_type,
+        top_mps=[
+            {"mp_name": m, "count": c} for m, c in stats.top_mps
         ],
         recent_questions=[
             {

@@ -43,11 +43,13 @@ let currentEvidence = [];
 // Cache for lazy-fetched absolute leading chunk text: key = "lok-sess-qno-cN"
 const _questionTextCache = new Map();
 
-// --- MP autocomplete state ---
+// --- Autocomplete state (MP + Ministry) ---
 
 let mpList = [];          // full list of MP names from API
+let ministryList = [];    // full list of ministry names from API
 let dropdownIndex = -1;   // keyboard navigation index in dropdown
 let mpFilter = null;      // currently selected MP name for Qdrant filtering
+let ministryFilter = null; // currently selected ministry name for Qdrant filtering
 
 async function loadMpList() {
     try {
@@ -63,12 +65,41 @@ async function loadMpList() {
     }
 }
 
+async function loadMinistryList() {
+    try {
+        const res = await fetch(`${API_BASE}/ministries`);
+        if (res.ok) {
+            ministryList = await res.json();
+            console.log(`Loaded ${ministryList.length} ministry names for autocomplete`);
+        } else {
+            console.warn('Failed to load ministry list:', res.status);
+        }
+    } catch (err) {
+        console.warn('Failed to load ministry list:', err);
+    }
+}
+
 function getMpTrigger() {
     const val = elements.queryInput.value;
     const cursorPos = elements.queryInput.selectionStart;
     const textBeforeCursor = val.slice(0, cursorPos);
 
     const match = textBeforeCursor.match(/(?:^|\s)mp:(\S*)$/i);
+    if (!match) return null;
+
+    return {
+        search: match[1].toLowerCase(),
+        tokenStart: match.index + (match[0].startsWith(' ') ? 1 : 0),
+        tokenEnd: cursorPos,
+    };
+}
+
+function getMinTrigger() {
+    const val = elements.queryInput.value;
+    const cursorPos = elements.queryInput.selectionStart;
+    const textBeforeCursor = val.slice(0, cursorPos);
+
+    const match = textBeforeCursor.match(/(?:^|\s)min:(\S*)$/i);
     if (!match) return null;
 
     return {
@@ -91,18 +122,18 @@ function highlightMatch(name, search) {
         name.slice(idx + search.length);
 }
 
-function showDropdown(trigger) {
-    if (!trigger || mpList.length === 0) {
+function showDropdown(trigger, list, selectFn, emptyLabel) {
+    if (!trigger || list.length === 0) {
         hideDropdown();
         return;
     }
 
-    const matches = mpList
+    const matches = list
         .filter(name => fuzzyMatch(name, trigger.search))
         .slice(0, 8);
 
     if (matches.length === 0) {
-        elements.mpDropdown.innerHTML = '<div class="mp-dropdown-item" style="color: var(--color-text-muted)">No matching MPs</div>';
+        elements.mpDropdown.innerHTML = `<div class="mp-dropdown-item" style="color: var(--color-text-muted)">${emptyLabel}</div>`;
         elements.mpDropdown.classList.add('visible');
         dropdownIndex = -1;
         return;
@@ -118,7 +149,7 @@ function showDropdown(trigger) {
     elements.mpDropdown.querySelectorAll('.mp-dropdown-item[data-name]').forEach(el => {
         el.addEventListener('mousedown', (e) => {
             e.preventDefault(); // prevent blur
-            selectMp(el.dataset.name, trigger);
+            selectFn(el.dataset.name, trigger);
         });
     });
 }
@@ -140,8 +171,9 @@ function selectMp(name, trigger) {
     const cursorPos = before.length + name.length;
     elements.queryInput.setSelectionRange(cursorPos, cursorPos);
 
-    // Set as active filter for Qdrant metadata filtering
+    // Set as active filter — mutual exclusion with ministry
     mpFilter = name;
+    ministryFilter = null;
     renderActiveFilters();
     console.log('MP filter set:', name);
 
@@ -149,31 +181,54 @@ function selectMp(name, trigger) {
     elements.queryInput.focus();
 }
 
+function selectMinistry(name, trigger) {
+    const val = elements.queryInput.value;
+    const before = val.slice(0, trigger.tokenStart);
+    const after = val.slice(trigger.tokenEnd);
+    elements.queryInput.value = before + name + after;
+
+    const cursorPos = before.length + name.length;
+    elements.queryInput.setSelectionRange(cursorPos, cursorPos);
+
+    // Set as active filter — mutual exclusion with MP
+    ministryFilter = name;
+    mpFilter = null;
+    renderActiveFilters();
+    console.log('Ministry filter set:', name);
+
+    hideDropdown();
+    elements.queryInput.focus();
+}
+
 function renderActiveFilters() {
-    if (!mpFilter) {
+    if (!mpFilter && !ministryFilter) {
         elements.activeFilters.classList.remove('visible');
         elements.activeFilters.innerHTML = '';
         return;
     }
 
+    const label = mpFilter ? `MP: ${mpFilter}` : `Ministry: ${ministryFilter}`;
+
     elements.activeFilters.classList.add('visible');
     elements.activeFilters.innerHTML = `
         <span class="filter-label">Filtering by:</span>
         <span class="filter-tag">
-            MP: ${mpFilter}
+            ${label}
             <button type="button" class="filter-tag-remove" title="Remove filter">\u00d7</button>
         </span>
     `;
 
     elements.activeFilters.querySelector('.filter-tag-remove').addEventListener('click', () => {
         mpFilter = null;
+        ministryFilter = null;
         renderActiveFilters();
-        console.log('MP filter cleared');
+        console.log('Filter cleared');
     });
 }
 
-function clearMpFilter() {
+function clearFilters() {
     mpFilter = null;
+    ministryFilter = null;
     renderActiveFilters();
 }
 
@@ -203,15 +258,19 @@ function handleDropdownKeyboard(e) {
     }
 
     if (e.key === 'Tab' || e.key === 'Enter') {
-        const trigger = getMpTrigger();
+        // Determine which trigger is active
+        const mpTrigger = getMpTrigger();
+        const minTrigger = getMinTrigger();
+        const trigger = mpTrigger || minTrigger;
+        const selectFn = mpTrigger ? selectMp : selectMinistry;
         if (!trigger) return false;
 
         e.preventDefault();
 
         if (dropdownIndex >= 0 && dropdownIndex < items.length) {
-            selectMp(items[dropdownIndex].dataset.name, trigger);
+            selectFn(items[dropdownIndex].dataset.name, trigger);
         } else if (items.length > 0) {
-            selectMp(items[0].dataset.name, trigger);
+            selectFn(items[0].dataset.name, trigger);
         }
         return true;
     }
@@ -361,20 +420,25 @@ function hideStatsPanel() {
     elements.statsContent.innerHTML = '';
 }
 
-function renderStatsProgressive(mpStats) {
-    if (!mpStats) {
+function renderStatsProgressive(stats, kind) {
+    if (!stats) {
         hideStatsPanel();
         return;
     }
 
+    const isMp = kind === 'mp';
+    const headerName = isMp ? stats.mp_name : stats.ministry;
+    const panelTitle = isMp ? 'MP Activity Summary' : 'Ministry Activity Summary';
+
     showStatsPanel();
+    document.querySelector('.stats-panel-header h2').textContent = panelTitle;
     elements.statsContent.innerHTML = '';
 
-    // Phase 1: Header (MP name + big number + lok/type chips) — immediate
-    const lokHTML = Object.entries(mpStats.by_lok)
+    // Phase 1: Header (name + big number + lok/type chips)
+    const lokHTML = Object.entries(stats.by_lok)
         .map(([k, v]) => `<span class="chip">Lok Sabha ${k}: ${v}</span>`)
         .join('');
-    const typeHTML = Object.entries(mpStats.by_type)
+    const typeHTML = Object.entries(stats.by_type)
         .map(([k, v]) => `<span class="chip secondary">${k}: ${v}</span>`)
         .join('');
 
@@ -382,8 +446,8 @@ function renderStatsProgressive(mpStats) {
     headerEl.className = 'stats-header stats-phase';
     headerEl.innerHTML = `
         <div class="stats-total">
-            <span class="stats-mp-name">${mpStats.mp_name}</span>
-            <span class="stats-big-number">${mpStats.total_questions}</span>
+            <span class="stats-mp-name">${headerName}</span>
+            <span class="stats-big-number">${stats.total_questions}</span>
             <span class="stats-label">total questions</span>
         </div>
         <div class="stats-breakdown">
@@ -393,34 +457,37 @@ function renderStatsProgressive(mpStats) {
     `;
     elements.statsContent.appendChild(headerEl);
 
-    // Phase 2: Ministry bar chart — staggered
-    const maxMinCount = mpStats.top_ministries.length > 0
-        ? mpStats.top_ministries[0].count : 1;
-    const ministryHTML = mpStats.top_ministries.slice(0, 10).map(m =>
+    // Phase 2: Bar chart — top ministries (for MP) or top MPs (for ministry)
+    const barItems = isMp ? stats.top_ministries : stats.top_mps;
+    const barLabel = isMp ? 'Top Ministries' : 'Top MPs';
+    const barNameKey = isMp ? 'ministry' : 'mp_name';
+
+    const maxBarCount = barItems.length > 0 ? barItems[0].count : 1;
+    const barHTML = barItems.slice(0, 10).map(item =>
         `<div class="stats-bar">
-            <span class="stats-bar-label" title="${m.ministry}">${m.ministry}</span>
+            <span class="stats-bar-label" title="${item[barNameKey]}">${item[barNameKey]}</span>
             <div class="stats-bar-track">
-                <div class="stats-bar-fill" data-width="${(m.count / maxMinCount * 100).toFixed(0)}%"></div>
+                <div class="stats-bar-fill" data-width="${(item.count / maxBarCount * 100).toFixed(0)}%"></div>
             </div>
-            <span class="stats-bar-count">${m.count}</span>
+            <span class="stats-bar-count">${item.count}</span>
         </div>`
     ).join('');
 
-    const ministriesEl = document.createElement('div');
-    ministriesEl.className = 'stats-ministries stats-phase';
-    ministriesEl.innerHTML = `<h4>Top Ministries</h4>${ministryHTML}`;
-    elements.statsContent.appendChild(ministriesEl);
+    const barEl = document.createElement('div');
+    barEl.className = 'stats-ministries stats-phase';
+    barEl.innerHTML = `<h4>${barLabel}</h4>${barHTML}`;
+    elements.statsContent.appendChild(barEl);
 
     // Animate bar widths after DOM paint
     requestAnimationFrame(() => {
-        ministriesEl.querySelectorAll('.stats-bar-fill').forEach(bar => {
+        barEl.querySelectorAll('.stats-bar-fill').forEach(bar => {
             bar.style.width = bar.dataset.width;
         });
     });
 
-    // Phase 3: Recent questions — staggered
-    if (mpStats.recent_questions.length > 0) {
-        const recentHTML = mpStats.recent_questions.map(q =>
+    // Phase 3: Recent questions
+    if (stats.recent_questions.length > 0) {
+        const recentHTML = stats.recent_questions.map(q =>
             `<li class="stats-question">
                 <span class="stats-q-subject">${q.subject}</span>
                 <span class="stats-q-meta">Lok ${q.lok_no}, Session ${q.session_no}, Q${q.ques_no} &middot; ${q.ministry} &middot; ${q.date || 'N/A'}</span>
@@ -839,9 +906,11 @@ async function handleSubmit(e) {
         payload.top_q = topQ;
     }
 
-    // MP name metadata filter
+    // Metadata filters (mutual exclusion: only one at a time)
     if (mpFilter) {
         payload.mp_names = [mpFilter];
+    } else if (ministryFilter) {
+        payload.ministry = ministryFilter;
     }
 
     setLoading(true);
@@ -854,10 +923,10 @@ async function handleSubmit(e) {
         showSynthesizingIndicator();
     }
 
-    // Fire stats fetch in parallel if MP filter is active (regardless of AI mode)
-    const shouldFetchStats = !!mpFilter;
+    // Fire stats fetch in parallel if a filter is active (regardless of AI mode)
+    const shouldFetchStats = !!(mpFilter || ministryFilter);
     let statsPromise = null;
-    if (shouldFetchStats) {
+    if (mpFilter) {
         statsPromise = fetch(`${API_BASE}/mp-stats`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -866,12 +935,25 @@ async function handleSubmit(e) {
         .then(res => res.ok ? res.json() : null)
         .catch(() => null);
 
-        // Show stats panel as soon as they arrive (don't wait for synthesize)
         statsPromise.then(statsData => {
             if (statsData) {
-                // Make results area visible so the grid layout activates
                 elements.results.classList.add('visible');
-                renderStatsProgressive(statsData);
+                renderStatsProgressive(statsData, 'mp');
+            }
+        });
+    } else if (ministryFilter) {
+        statsPromise = fetch(`${API_BASE}/ministry-stats`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ministry: ministryFilter, top_q: topQ }),
+        })
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+
+        statsPromise.then(statsData => {
+            if (statsData) {
+                elements.results.classList.add('visible');
+                renderStatsProgressive(statsData, 'ministry');
             }
         });
     }
@@ -898,7 +980,9 @@ async function handleSubmit(e) {
             renderAnswer(data.answer);
             // If stats weren't fetched in parallel (edge case), use inline data
             if (!shouldFetchStats && data.mp_stats) {
-                renderStatsProgressive(data.mp_stats);
+                renderStatsProgressive(data.mp_stats, 'mp');
+            } else if (!shouldFetchStats && data.ministry_stats) {
+                renderStatsProgressive(data.ministry_stats, 'ministry');
             } else if (!shouldFetchStats) {
                 hideStatsPanel();
             }
@@ -921,13 +1005,16 @@ async function handleSubmit(e) {
 
 elements.form.addEventListener('submit', (e) => {
     // If dropdown is open and user presses Enter, it should select, not submit
-    const trigger = getMpTrigger();
+    const mpTrigger = getMpTrigger();
+    const minTrigger = getMinTrigger();
+    const trigger = mpTrigger || minTrigger;
     if (trigger && elements.mpDropdown.classList.contains('visible')) {
         e.preventDefault();
         const items = getVisibleDropdownItems();
         if (items.length > 0) {
             const idx = dropdownIndex >= 0 ? dropdownIndex : 0;
-            selectMp(items[idx].dataset.name, trigger);
+            const selectFn = mpTrigger ? selectMp : selectMinistry;
+            selectFn(items[idx].dataset.name, trigger);
         }
         return;
     }
@@ -935,11 +1022,14 @@ elements.form.addEventListener('submit', (e) => {
 });
 
 elements.queryInput.addEventListener('input', () => {
-    const trigger = getMpTrigger();
-    if (trigger) {
-        console.log('MP trigger detected:', trigger.search, `(${mpList.length} MPs loaded)`);
+    const mpTrigger = getMpTrigger();
+    const minTrigger = getMinTrigger();
+    if (mpTrigger) {
         dropdownIndex = -1;
-        showDropdown(trigger);
+        showDropdown(mpTrigger, mpList, selectMp, 'No matching MPs');
+    } else if (minTrigger) {
+        dropdownIndex = -1;
+        showDropdown(minTrigger, ministryList, selectMinistry, 'No matching ministries');
     } else {
         hideDropdown();
     }
@@ -966,3 +1056,4 @@ document.addEventListener('keydown', (e) => {
 
 elements.queryInput.focus();
 loadMpList();
+loadMinistryList();

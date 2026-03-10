@@ -87,6 +87,17 @@ class MpStatsResponse(BaseModel):
     recent_questions: List[dict]
 
 
+class MinistryStatsResponse(BaseModel):
+    """Ministry activity statistics from the metadata database."""
+    ministry: str
+    total_questions: int
+    by_lok: dict
+    by_session: dict
+    by_type: dict
+    top_mps: List[dict]
+    recent_questions: List[dict]
+
+
 class SynthesizeResponse(BaseModel):
     query: str
     answer: str
@@ -94,6 +105,7 @@ class SynthesizeResponse(BaseModel):
     evidence_groups: List[EvidenceGroupResponse]
     total_chunks: int
     mp_stats: Optional[MpStatsResponse] = None
+    ministry_stats: Optional[MinistryStatsResponse] = None
 
 
 # ── Debug / Trace models ──────────────────────────────────────────────

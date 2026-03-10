@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from lok_sabha_rag.api.routes import search, synthesize, members, stats, question_text, debug
+from lok_sabha_rag.api.routes import search, synthesize, members, ministries, stats, question_text, debug
 
 app = FastAPI(
     title="Lok Sabha RAG",
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(search.router, prefix="/api", tags=["search"])
 app.include_router(synthesize.router, prefix="/api", tags=["synthesize"])
 app.include_router(members.router, prefix="/api", tags=["members"])
+app.include_router(ministries.router, prefix="/api", tags=["ministries"])
 app.include_router(stats.router, prefix="/api", tags=["stats"])
 app.include_router(question_text.router, prefix="/api", tags=["question-text"])
 app.include_router(debug.router, prefix="/api/debug", tags=["debug"])

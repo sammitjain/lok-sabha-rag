@@ -1,4 +1,4 @@
-"""Query MP statistics from the SQLite metadata database."""
+"""Query MP and ministry statistics from the SQLite metadata database."""
 
 from __future__ import annotations
 
@@ -103,6 +103,95 @@ def get_mp_stats(
         conn.close()
 
 
+@dataclass
+class MinistryStats:
+    ministry: str
+    total_questions: int
+    by_lok: dict[int, int]
+    by_session: dict[str, int]
+    by_type: dict[str, int]
+    top_mps: List[Tuple[str, int]]  # sorted desc, top 15
+    recent_questions: List[QuestionRecord]
+
+
+def get_ministry_stats(
+    ministry: str,
+    top_q: int = 10,
+    db_path: str | Path = METADATA_DB_PATH,
+) -> Optional[MinistryStats]:
+    """Query metadata DB for a ministry's parliamentary question statistics.
+
+    Returns None if the ministry has no questions in the database.
+    """
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT lok_no, session_no, ques_no, type, date,
+                   ministry, subject
+            FROM questions
+            WHERE ministry = ?
+            ORDER BY date DESC, ques_no DESC
+            """,
+            (ministry,),
+        ).fetchall()
+
+        if not rows:
+            return None
+
+        by_lok: dict[int, int] = {}
+        by_session: dict[str, int] = {}
+        by_type: dict[str, int] = {}
+
+        for r in rows:
+            by_lok[r["lok_no"]] = by_lok.get(r["lok_no"], 0) + 1
+            key = f"Lok {r['lok_no']} Session {r['session_no']}"
+            by_session[key] = by_session.get(key, 0) + 1
+            by_type[r["type"]] = by_type.get(r["type"], 0) + 1
+
+        # Top 15 MPs who asked questions to this ministry
+        mp_rows = conn.execute(
+            """
+            SELECT m.mp_name, COUNT(*) as cnt
+            FROM question_mps m
+            JOIN questions q USING (lok_no, session_no, type, ques_no)
+            WHERE q.ministry = ?
+            GROUP BY m.mp_name
+            ORDER BY cnt DESC
+            LIMIT 15
+            """,
+            (ministry,),
+        ).fetchall()
+        top_mps = [(r["mp_name"], r["cnt"]) for r in mp_rows]
+
+        recent = [
+            QuestionRecord(
+                lok_no=r["lok_no"],
+                session_no=r["session_no"],
+                ques_no=r["ques_no"],
+                type=r["type"],
+                date=r["date"],
+                ministry=r["ministry"],
+                subject=(r["subject"] or "").strip(),
+            )
+            for r in rows[:top_q]
+        ]
+
+        return MinistryStats(
+            ministry=ministry,
+            total_questions=len(rows),
+            by_lok=dict(sorted(by_lok.items())),
+            by_session=dict(sorted(by_session.items())),
+            by_type=dict(sorted(by_type.items())),
+            top_mps=top_mps,
+            recent_questions=recent,
+        )
+    finally:
+        conn.close()
+
+
 def format_stats_for_llm(stats: MpStats) -> str:
     """Format MP stats into a delimited text block for inclusion in LLM context."""
     lines: list[str] = []
@@ -146,5 +235,47 @@ def format_stats_for_llm(stats: MpStats) -> str:
         "including those whose full text may not be in the evidence chunks below."
     )
     lines.append("=== END MP STATISTICS ===")
+
+    return "\n".join(lines)
+
+
+def format_ministry_stats_for_llm(stats: MinistryStats) -> str:
+    """Format ministry stats into a delimited text block for inclusion in LLM context."""
+    lines: list[str] = []
+
+    lines.append("=== MINISTRY STATISTICS (from parliamentary metadata) ===")
+    lines.append(f"Ministry: {stats.ministry}")
+    lines.append(f"Total questions received: {stats.total_questions}")
+    lines.append("")
+
+    lines.append("By Lok Sabha:")
+    for lok, count in stats.by_lok.items():
+        lines.append(f"  Lok {lok}: {count}")
+    lines.append("")
+
+    lines.append("By Type:")
+    for qtype, count in stats.by_type.items():
+        lines.append(f"  {qtype}: {count}")
+    lines.append("")
+
+    lines.append("Top MPs asking this ministry:")
+    for mp, count in stats.top_mps:
+        lines.append(f"  {count:4d}  {mp}")
+    lines.append("")
+
+    if stats.recent_questions:
+        lines.append(f"Recent Questions (most recent {len(stats.recent_questions)}):")
+        for i, q in enumerate(stats.recent_questions, 1):
+            lines.append(
+                f"  {i}. [Lok {q.lok_no}, Session {q.session_no}, Q{q.ques_no}] "
+                f"{q.subject} ({q.date or 'N/A'})"
+            )
+        lines.append("")
+
+    lines.append(
+        "NOTE: These statistics cover ALL questions directed to this ministry, "
+        "including those whose full text may not be in the evidence chunks below."
+    )
+    lines.append("=== END MINISTRY STATISTICS ===")
 
     return "\n".join(lines)

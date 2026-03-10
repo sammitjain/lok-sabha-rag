@@ -7,7 +7,7 @@ import os
 from fastapi import APIRouter, HTTPException
 
 from lok_sabha_rag.core.retriever import Retriever, EvidenceItem, EvidenceGroup
-from lok_sabha_rag.core.stats import get_mp_stats, format_stats_for_llm
+from lok_sabha_rag.core.stats import get_mp_stats, format_stats_for_llm, get_ministry_stats, format_ministry_stats_for_llm
 
 _LOG_CHUNKS = os.environ.get("RAG_LOG_CHUNKS", "").strip() == "1"
 from lok_sabha_rag.core.synthesizer import Synthesizer, extract_citations
@@ -16,6 +16,7 @@ from lok_sabha_rag.api.schemas import (
     SynthesizeResponse,
     EvidenceGroupResponse,
     MpStatsResponse,
+    MinistryStatsResponse,
     ChunkDetail,
 )
 
@@ -90,13 +91,18 @@ def synthesize(req: SynthesizeRequest) -> SynthesizeResponse:
             detail="No relevant evidence found. Try broadening your search or removing filters.",
         )
 
-    # Fetch MP stats from metadata DB when a single MP filter is active
+    # Fetch stats from metadata DB when a filter is active
     mp_stats = None
-    mp_stats_text = ""
+    ministry_stats = None
+    stats_text = ""
     if req.mp_names and len(req.mp_names) == 1:
         mp_stats = get_mp_stats(req.mp_names[0], top_q=req.top_q or 10)
         if mp_stats:
-            mp_stats_text = format_stats_for_llm(mp_stats)
+            stats_text = format_stats_for_llm(mp_stats)
+    elif req.ministry:
+        ministry_stats = get_ministry_stats(req.ministry, top_q=req.top_q or 10)
+        if ministry_stats:
+            stats_text = format_ministry_stats_for_llm(ministry_stats)
 
     # Group by parliamentary question, trim to top N questions with C chunks each
     groups = retriever.group_evidence(
@@ -114,8 +120,8 @@ def synthesize(req: SynthesizeRequest) -> SynthesizeResponse:
     evidence_context = retriever.build_context_grouped(groups)
 
     # Compose full context: stats (if available) + evidence
-    if mp_stats_text:
-        context = mp_stats_text + "\n\n" + evidence_context
+    if stats_text:
+        context = stats_text + "\n\n" + evidence_context
     else:
         context = evidence_context
 
@@ -150,7 +156,7 @@ def synthesize(req: SynthesizeRequest) -> SynthesizeResponse:
         for g in groups
     ]
 
-    # Build stats response for frontend display
+    # Build stats responses for frontend display
     mp_stats_response = None
     if mp_stats:
         mp_stats_response = MpStatsResponse(
@@ -176,6 +182,31 @@ def synthesize(req: SynthesizeRequest) -> SynthesizeResponse:
             ],
         )
 
+    ministry_stats_response = None
+    if ministry_stats:
+        ministry_stats_response = MinistryStatsResponse(
+            ministry=ministry_stats.ministry,
+            total_questions=ministry_stats.total_questions,
+            by_lok=ministry_stats.by_lok,
+            by_session=ministry_stats.by_session,
+            by_type=ministry_stats.by_type,
+            top_mps=[
+                {"mp_name": m, "count": c} for m, c in ministry_stats.top_mps
+            ],
+            recent_questions=[
+                {
+                    "lok_no": q.lok_no,
+                    "session_no": q.session_no,
+                    "ques_no": q.ques_no,
+                    "type": q.type,
+                    "date": q.date,
+                    "ministry": q.ministry,
+                    "subject": q.subject,
+                }
+                for q in ministry_stats.recent_questions
+            ],
+        )
+
     return SynthesizeResponse(
         query=req.query,
         answer=answer,
@@ -183,4 +214,5 @@ def synthesize(req: SynthesizeRequest) -> SynthesizeResponse:
         evidence_groups=evidence_groups,
         total_chunks=len(items),
         mp_stats=mp_stats_response,
+        ministry_stats=ministry_stats_response,
     )
