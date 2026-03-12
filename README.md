@@ -13,6 +13,8 @@ Part of the **OpenSansad** initiative — an effort to make Sansad's (Indian Par
 ![OpenSansad Demo](docs/assets/demo_retrieval.png)
 ![OpenSansad Demo](docs/assets/demo_synthesis.png)
 
+![RAG Pipeline](docs/assets/rag_pipeline.png)
+
 ## Features
 
 - **Semantic search** across 86,500+ parliamentary questions (Lok Sabha 17 & 18)
