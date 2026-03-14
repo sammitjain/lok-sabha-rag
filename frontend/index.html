@@ -12,8 +12,11 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>Lok Sabha Questions & Answers</h1>
-            <p class="subtitle">Search parliamentary records from the 18th Lok Sabha</p>
+            <img src="/static/OpenSansad_Logo.svg" alt="OpenSansad" class="header-logo">
+            <div class="header-text">
+                <h1>Lok Sabha Questions & Answers</h1>
+                <p class="subtitle">Search across 86,500+ questions from 2019 to 2026</p>
+            </div>
         </header>
 
         <main class="main">
@@ -45,25 +48,13 @@
                         </label>
                         <span class="toggle-label">AI-synthesized answer</span>
                     </div>
-                    
-                    <div class="retrieval-controls">
-                        <div class="topk-control">
-                            <label for="topk-input" title="M: Total chunks retrieved from vector search">Chunks (M):</label>
-                            <input type="number" id="topk-input" value="50" min="5" max="200" step="5">
-                        </div>
-                        <div class="topk-control">
-                            <label for="topn-input" title="N: Max unique questions to keep">Questions (N):</label>
-                            <input type="number" id="topn-input" value="10" min="1" max="50" step="1">
-                        </div>
-                        <div class="topk-control">
-                            <label for="cpq-input" title="C: Leading chunks per question (skips trailing annexures)">Chunks/Q (C):</label>
-                            <input type="number" id="cpq-input" value="1" min="1" max="10" step="1">
-                        </div>
-                        <div class="topk-control">
-                            <label for="topq-input" title="Q: Recent questions in MP stats summary">Stats (Q):</label>
-                            <input type="number" id="topq-input" value="15" min="1" max="50" step="1">
-                        </div>
-                    </div>
+
+                    <button type="button" id="settings-btn" class="settings-btn" title="Retrieval settings">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                    </button>
                 </div>
             </form>
 
@@ -115,6 +106,38 @@
             </div>
             <div class="modal-body" id="modal-body"></div>
             <div class="modal-footer" id="modal-footer"></div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="settings-modal">
+        <div class="settings-backdrop"></div>
+        <div class="settings-content">
+            <div class="settings-header">
+                <h3>Retrieval Settings</h3>
+                <button class="settings-close" id="settings-close">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-field">
+                    <label for="topk-input">Chunks (M)</label>
+                    <p class="settings-desc">Total chunks retrieved from vector search</p>
+                    <input type="number" id="topk-input" value="50" min="5" max="200" step="5">
+                </div>
+                <div class="settings-field">
+                    <label for="topn-input">Questions (N)</label>
+                    <p class="settings-desc">Max unique questions to keep</p>
+                    <input type="number" id="topn-input" value="10" min="1" max="50" step="1">
+                </div>
+                <div class="settings-field">
+                    <label for="cpq-input">Chunks/Q (C)</label>
+                    <p class="settings-desc">Leading chunks per question (skips trailing annexures)</p>
+                    <input type="number" id="cpq-input" value="1" min="1" max="10" step="1">
+                </div>
+                <div class="settings-field">
+                    <label for="topq-input">Stats (Q)</label>
+                    <p class="settings-desc">Recent questions in stats summary</p>
+                    <input type="number" id="topq-input" value="15" min="1" max="50" step="1">
+                </div>
+            </div>
         </div>
     </div>
 

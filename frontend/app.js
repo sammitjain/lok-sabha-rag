@@ -36,6 +36,9 @@ const elements = {
     resultsLayout: document.getElementById('results-layout'),
     statsPanel: document.getElementById('stats-panel'),
     statsContent: document.getElementById('stats-content'),
+    settingsBtn: document.getElementById('settings-btn'),
+    settingsModal: document.getElementById('settings-modal'),
+    settingsClose: document.getElementById('settings-close'),
 };
 
 let currentEvidence = [];
@@ -445,14 +448,13 @@ function renderStatsProgressive(stats, kind) {
     const headerEl = document.createElement('div');
     headerEl.className = 'stats-header stats-phase';
     headerEl.innerHTML = `
+        <div class="stats-name">${headerName}</div>
         <div class="stats-total">
-            <span class="stats-mp-name">${headerName}</span>
             <span class="stats-big-number">${stats.total_questions}</span>
             <span class="stats-label">total questions</span>
         </div>
         <div class="stats-breakdown">
-            <div class="stats-sessions">${lokHTML}</div>
-            <div class="stats-types">${typeHTML}</div>
+            ${lokHTML}${typeHTML}
         </div>
     `;
     elements.statsContent.appendChild(headerEl);
@@ -1046,9 +1048,27 @@ elements.queryInput.addEventListener('blur', () => {
 elements.modalClose.addEventListener('click', closeModal);
 elements.modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
 
+// --- Settings modal ---
+
+function openSettings() {
+    elements.settingsModal.classList.add('open');
+}
+
+function closeSettings() {
+    elements.settingsModal.classList.remove('open');
+}
+
+elements.settingsBtn.addEventListener('click', openSettings);
+elements.settingsClose.addEventListener('click', closeSettings);
+elements.settingsModal.querySelector('.settings-backdrop').addEventListener('click', closeSettings);
+
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && elements.modal.classList.contains('open')) {
-        closeModal();
+    if (e.key === 'Escape') {
+        if (elements.settingsModal.classList.contains('open')) {
+            closeSettings();
+        } else if (elements.modal.classList.contains('open')) {
+            closeModal();
+        }
     }
 });
 
