@@ -580,26 +580,73 @@ body {
 }
 
 .answer-content .citation {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.375rem;
-    height: 1.125rem;
-    padding: 0 0.3125rem;
-    font-size: 0.6875rem;
+    position: relative;
+    font-size: 0.7em;
     font-weight: 600;
-    background: var(--color-accent-subtle);
     color: var(--color-accent);
-    border-radius: 3px;
     cursor: pointer;
-    transition: background 0.15s;
-    vertical-align: middle;
-    margin: 0 0.125rem;
+    padding: 0 0.125rem;
+    vertical-align: super;
+    line-height: 1;
 }
 
 .answer-content .citation:hover {
-    background: var(--color-accent);
-    color: #fff;
+    text-decoration: underline;
+}
+
+/* Citation hover tooltip */
+.citation-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--color-text);
+    width: max-content;
+    max-width: 480px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 100;
+    pointer-events: auto;
+    padding-bottom: 12px;
+    margin-bottom: 0;
+}
+
+/* Invisible bridge so cursor can travel from citation to tooltip */
+.citation-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 12px;
+}
+
+.citation:hover .citation-tooltip {
+    display: block;
+}
+
+.citation-tooltip div:first-child {
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.citation-tooltip-pdf {
+    display: inline-block;
+    margin-top: 0.3rem;
+    font-size: 0.6875rem;
+    color: var(--color-accent);
+    text-decoration: none;
+}
+
+.citation-tooltip-pdf:hover {
+    text-decoration: underline;
 }
 
 /* Results layout — two-column grid when stats panel is open */

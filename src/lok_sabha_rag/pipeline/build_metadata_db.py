@@ -8,11 +8,13 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
 import typer
+from huggingface_hub import hf_hub_download
 
 from lok_sabha_rag.config import DATA_DIR, HF_DATASET_REPO, METADATA_DB_PATH
 
@@ -60,6 +62,49 @@ def _pdf_filename_from_url(url: str | None) -> str | None:
     return fname if fname else None
 
 
+# Known Lok Sabha numbers with supplementary member data (ascending order)
+_KNOWN_LOKS = [17, 18]
+
+
+def _build_mp_name_map(dataset_repo: str) -> dict[str, str]:
+    """Build old_name → canonical_name map using mpNo from members.json.
+
+    Loads members.json for each known Lok Sabha from HuggingFace.  When the
+    same mpNo appears in multiple Lok Sabhas with different display names,
+    the most recent (highest) Lok Sabha's name is used as the canonical form.
+
+    Returns a dict mapping every known name variant to the canonical name.
+    """
+    by_mpno: dict[int, list[tuple[int, str]]] = {}
+
+    for lok in _KNOWN_LOKS:
+        try:
+            path = hf_hub_download(
+                repo_id=dataset_repo,
+                filename=f"supplementary/{lok}/members.json",
+                repo_type="dataset",
+            )
+            with open(path, "r", encoding="utf-8") as f:
+                entries = json.load(f)
+        except Exception:
+            continue
+
+        for entry in entries:
+            mp_no = entry.get("mpNo")
+            mp_name = entry.get("mpName")
+            if mp_no and mp_name:
+                by_mpno.setdefault(mp_no, []).append((lok, mp_name))
+
+    # For each mpNo, pick the name from the latest lok as canonical
+    name_map: dict[str, str] = {}
+    for mp_no, entries in by_mpno.items():
+        canonical = max(entries, key=lambda x: x[0])[1]
+        for _, name in entries:
+            name_map[name] = canonical
+
+    return name_map
+
+
 def _load_dataset(dataset: str, parquet: str | None) -> list[dict]:
     """Load dataset rows from HF or a local parquet file."""
     if parquet:
@@ -79,13 +124,14 @@ def _load_dataset(dataset: str, parquet: str | None) -> list[dict]:
 # ── Core ──────────────────────────────────────────────────────────────────────
 
 
-def _build(rows: list[dict], db_path: Path) -> None:
+def _build(rows: list[dict], db_path: Path, mp_name_map: dict[str, str]) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA_SQL)
 
     q_count = 0
     mp_count = 0
+    mp_renamed = 0
 
     for row in rows:
         lok = row.get("lok_no")
@@ -121,17 +167,23 @@ def _build(rows: list[dict], db_path: Path) -> None:
         for mp in row.get("members") or []:
             mp = mp.strip()
             if mp:
+                canonical = mp_name_map.get(mp, mp)
+                if canonical != mp:
+                    mp_renamed += 1
                 conn.execute(
                     "INSERT INTO question_mps (lok_no, session_no, ques_no, type, mp_name) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    (lok, sess, qno, qtype, mp),
+                    (lok, sess, qno, qtype, canonical),
                 )
                 mp_count += 1
 
     conn.commit()
     conn.close()
 
-    typer.echo(f"Done — {q_count} questions, {mp_count} MP rows → {db_path.resolve()}")
+    typer.echo(
+        f"Done — {q_count} questions, {mp_count} MP rows "
+        f"({mp_renamed} name canonicalisations) → {db_path.resolve()}"
+    )
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -146,7 +198,13 @@ def build(
     """Build the metadata SQLite database from the HuggingFace dataset."""
     rows = _load_dataset(dataset, parquet)
     typer.echo(f"Loaded {len(rows)} rows from dataset")
-    _build(rows, db_path)
+
+    typer.echo("Building MP name canonicalisation map from members.json ...")
+    mp_name_map = _build_mp_name_map(dataset)
+    conflicts = sum(1 for k, v in mp_name_map.items() if k != v)
+    typer.echo(f"  {len(mp_name_map)} names loaded, {conflicts} will be remapped")
+
+    _build(rows, db_path, mp_name_map)
 
 
 if __name__ == "__main__":

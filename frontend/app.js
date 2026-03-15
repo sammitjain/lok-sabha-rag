@@ -313,9 +313,25 @@ function hideError() {
     elements.error.classList.remove('visible');
 }
 
-function formatCitations(text) {
+function formatCitations(text, evidenceGroups) {
     return text.replace(/\[Q(\d+)\]/g, (match, num) => {
-        return `<span class="citation" data-index="${num}">${match}</span>`;
+        const idx = parseInt(num, 10);
+        const group = evidenceGroups ? evidenceGroups.find(g => g.group_index === idx) : null;
+        if (!group) {
+            return `<sup class="citation" data-index="${num}">${match}</sup>`;
+        }
+        const tipParts = [];
+        if (group.subject) tipParts.push(group.subject);
+        const meta = [];
+        if (group.lok_no) meta.push(`Lok ${group.lok_no}`);
+        if (group.session_no) meta.push(`Session ${group.session_no}`);
+        if (group.ques_no) meta.push(`Q${group.ques_no}`);
+        if (group.type) meta.push(group.type);
+        if (group.ministry) meta.push(group.ministry);
+        if (meta.length) tipParts.push(meta.join(' · '));
+        const tipText = tipParts.join('\n');
+        const pdfUrl = group.pdf_url || '';
+        return `<sup class="citation" data-index="${num}" data-tip="${tipText.replace(/"/g, '&quot;')}" data-pdf="${pdfUrl}">${match}</sup>`;
     });
 }
 
@@ -346,16 +362,29 @@ function formatAskedBy(askedBy) {
     return `${names[0]} + ${names.length - 1} more`;
 }
 
-function renderAnswer(answer) {
+function renderAnswer(answer, evidenceGroups) {
     elements.answerSection.classList.add('visible');
     const html = marked.parse(answer);
-    elements.answerContent.innerHTML = formatCitations(html);
+    elements.answerContent.innerHTML = formatCitations(html, evidenceGroups);
 
     elements.answerContent.querySelectorAll('.citation').forEach(el => {
         el.addEventListener('click', () => {
             const index = parseInt(el.dataset.index, 10);
             scrollToEvidence(index);
         });
+
+        // Hover tooltip
+        if (el.dataset.tip) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'citation-tooltip';
+            const lines = el.dataset.tip.split('\n');
+            let tipHTML = lines.map(l => `<div>${l}</div>`).join('');
+            if (el.dataset.pdf) {
+                tipHTML += `<a href="${el.dataset.pdf}" target="_blank" class="citation-tooltip-pdf" onclick="event.stopPropagation()">View PDF &rarr;</a>`;
+            }
+            tooltip.innerHTML = tipHTML;
+            el.appendChild(tooltip);
+        }
     });
 }
 
@@ -979,7 +1008,7 @@ async function handleSubmit(e) {
 
         if (useAI) {
             hideSynthesizingIndicator();
-            renderAnswer(data.answer);
+            renderAnswer(data.answer, data.evidence_groups);
             // If stats weren't fetched in parallel (edge case), use inline data
             if (!shouldFetchStats && data.mp_stats) {
                 renderStatsProgressive(data.mp_stats, 'mp');
