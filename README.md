@@ -9,23 +9,24 @@
 <h1 align="center">OpenSansad — Lok Sabha Q&A RAG</h1>
 
 <p align="center">
-  A personal project to bring transparency to India's parliamentary proceedings by making Lok Sabha Q&A records searchable, explorable, and AI-augmented.
+Ask Questions of Questions in the Lok Sabha. Bringing transparency to India's parliamentary proceedings by making Lok Sabha Q&A records searchable with Natural Language. Stretching to 89000+ questions from 2019 to 2026 so far and growing.
 </p>
 
 Part of the **OpenSansad** initiative — an effort to make Sansad's (Indian Parliament's) workings more accessible and transparent through open data and open-source tooling. Data sourced from [Digital Sansad](https://sansad.in/) via the [lok-sabha-dataset](https://github.com/sammitjain/lok-sabha-dataset) pipeline.
 
-![OpenSansad Demo](docs/assets/demo_synthesis_1.png)
-![OpenSansad Demo](docs/assets/demo_synthesis_2.png)
-
-![RAG Pipeline](docs/assets/rag_pipeline.png)
+<p align="center">
+  <img src="docs/assets/demo_synthesis_1.png" width="500"/>
+</p>
+<p align="center">
+  <img src="docs/assets/demo_synthesis_2.png" width="600"/>
+</p>
 
 ## Features
 
 - **Semantic search** across 89,700+ parliamentary questions (Lok Sabha 16, 17 & 18)
 - **AI-powered answer synthesis** with `[Q#]` citations back to source PDFs (GPT-4o-mini)
-- **MP activity statistics** from metadata database (question counts, ministry breakdowns)
+- **MP activity and Ministry activity statistics** from metadata database (question counts, ministry breakdowns)
 - **Filter by** Lok Sabha number, session, ministry, or MP name
-- **Lazy-loaded question text** — card content fetched on demand from Qdrant
 
 ## Quick Start
 
@@ -57,6 +58,8 @@ uv run python main.py
 ```
 
 ## Architecture
+
+![RAG Pipeline](docs/assets/rag_pipeline_full.png)
 
 ```
 src/lok_sabha_rag/
