@@ -16,7 +16,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import typer
 from qdrant_client import QdrantClient, models
@@ -220,6 +220,7 @@ def index_chunks(
 @app.command()
 def run(
     data_dir: str = typer.Option(str(DATA_DIR), help="Base data directory to scan for chunks.jsonl"),
+    files: Optional[List[str]] = typer.Option(None, "--files", "-f", help="Specific chunks.jsonl file paths (skips auto-discovery)"),
     collection: str = typer.Option(QDRANT_COLLECTION, help="Qdrant collection name"),
     model: str = typer.Option(EMBEDDING_MODEL, help="Embedding model"),
     batch_size: int = typer.Option(512, help="Chunks per batch"),
@@ -227,12 +228,28 @@ def run(
     port: int = typer.Option(QDRANT_PORT, help="Qdrant port"),
     overwrite: bool = typer.Option(False, help="Delete existing collection before indexing"),
 ) -> None:
-    """Index all chunks.jsonl files found under data_dir into Qdrant."""
+    """Index chunks.jsonl files into Qdrant.
+
+    By default, auto-discovers all chunks.jsonl under data_dir.
+    Use --files / -f to specify exact paths instead:
+
+        uv run python -m lok_sabha_rag.pipeline.embed -f data/17/chunks/session_14/chunks.jsonl
+        uv run python -m lok_sabha_rag.pipeline.embed -f path/a.jsonl -f path/b.jsonl
+    """
     data_path = Path(data_dir)
-    chunks_files = discover_chunks_files(data_path)
+
+    if files:
+        chunks_files = [Path(f) for f in files]
+        # Validate all paths exist
+        for f in chunks_files:
+            if not f.exists():
+                logger.error("File not found: %s", f)
+                raise typer.Exit(code=1)
+    else:
+        chunks_files = discover_chunks_files(data_path)
 
     if not chunks_files:
-        logger.error("No chunks.jsonl files found under %s", data_path)
+        logger.error("No chunks.jsonl files found")
         raise typer.Exit(code=1)
 
     logger.info("Found %d chunks.jsonl files to index", len(chunks_files))
@@ -258,10 +275,10 @@ def run(
         texts, ids, payloads = load_chunks_from_file(chunks_path)
 
         if not texts:
-            logger.warning("No valid chunks in %s", chunks_path)
+            logger.warning("No valid chunks in %s — skipping", chunks_path)
             continue
 
-        logger.info("Indexing %d chunks from %s", len(texts), chunks_path.relative_to(data_path))
+        logger.info("Indexing %d chunks from %s", len(texts), chunks_path)
         indexed = index_chunks(
             client=client,
             collection=collection,
@@ -270,7 +287,7 @@ def run(
             ids=ids,
             payloads=payloads,
             batch_size=batch_size,
-            desc=str(chunks_path.relative_to(data_path)),
+            desc=chunks_path.name,
         )
         total_indexed += indexed
 

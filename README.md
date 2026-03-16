@@ -21,7 +21,7 @@ Part of the **OpenSansad** initiative — an effort to make Sansad's (Indian Par
 
 ## Features
 
-- **Semantic search** across 86,500+ parliamentary questions (Lok Sabha 17 & 18)
+- **Semantic search** across 89,700+ parliamentary questions (Lok Sabha 16, 17 & 18)
 - **AI-powered answer synthesis** with `[Q#]` citations back to source PDFs (GPT-4o-mini)
 - **MP activity statistics** from metadata database (question counts, ministry breakdowns)
 - **Filter by** Lok Sabha number, session, ministry, or MP name
@@ -31,35 +31,29 @@ Part of the **OpenSansad** initiative — an effort to make Sansad's (Indian Par
 
 ### Prerequisites
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) package manager
-- [Docker](https://docs.docker.com/get-docker/) (for Qdrant vector database)
-- OpenAI API key (for AI synthesis mode)
+- [Docker](https://docs.docker.com/get-docker/)
 
 ### Setup
 
 ```bash
-git clone <repo-url> && cd lok-sabha-rag
-./scripts/setup.sh
-# Edit .env to add your OPENAI_API_KEY
-uv run python main.py
+git clone https://github.com/sammitjain/lok-sabha-rag.git && cd lok-sabha-rag
+cp .env.example .env    # add your OPENAI_API_KEY
+docker compose up
 # Open http://localhost:8000
 ```
 
-### Manual Setup
+On first run, the app automatically downloads the pre-built vector database (~1.5 GB) and metadata from HuggingFace. Subsequent starts are instant.
+
+> **Note:** Search and browsing work without an OpenAI key. The key is only needed for the AI-powered answer synthesis feature.
+
+### Development Setup
+
+For local development without Docker:
 
 ```bash
-cp .env.example .env              # add your OPENAI_API_KEY
-uv sync                           # install Python dependencies
-docker compose up -d               # start Qdrant on localhost:6333
-
-# Restore Qdrant snapshot (ships a starter collection)
-# OR build from HuggingFace dataset:
-uv run python -m lok_sabha_rag.pipeline.build_chunks --max-files 50 --data-dir data/sample
-uv run python -m lok_sabha_rag.pipeline.embed --data-dir data/sample
-
-# Start server
-uv run python main.py             # http://localhost:8000
+# Requires: Python 3.11+, uv, Docker (for Qdrant only)
+bash scripts/setup.sh
+uv run python main.py
 ```
 
 ## Architecture
@@ -79,27 +73,6 @@ src/lok_sabha_rag/
 - **Frontend**: Vanilla JS/CSS single-page app
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full reference.
-
-## Data Pipeline
-
-This repo handles the **downstream** RAG pipeline — chunking and embedding. The upstream data pipeline (curate, download, extract, build parquet) lives in [lok-sabha-dataset](https://github.com/sammitjain/lok-sabha-dataset).
-
-```
-HuggingFace dataset (opensansad/lok-sabha-qa)
-  → build_chunks.py   # tokenizer-aware splitting (model-agnostic, 500 token default)
-  → embed.py              # embed with FastEmbed, upsert to Qdrant
-```
-
-## Documentation
-
-The `docs/` directory contains a project knowledge base:
-
-| File | Contents |
-|------|----------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Tech stack, directory tree, data flow |
-| [BACKEND.md](docs/BACKEND.md) | API routes, core modules, schemas |
-| [FRONTEND.md](docs/FRONTEND.md) | JS functions, CSS variables, UI behavior |
-| [DATA_PIPELINE.md](docs/DATA_PIPELINE.md) | Pipeline stages, data layout, Qdrant schema |
 
 ## Related
 

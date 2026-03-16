@@ -1,0 +1,12 @@
+.git
+.github
+.claude
+.env
+data/
+output/
+docs/
+*.snapshot
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache

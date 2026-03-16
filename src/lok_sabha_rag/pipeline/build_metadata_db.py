@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 import typer
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, list_repo_tree
 
 from lok_sabha_rag.config import DATA_DIR, HF_DATASET_REPO, METADATA_DB_PATH
 
@@ -62,22 +62,30 @@ def _pdf_filename_from_url(url: str | None) -> str | None:
     return fname if fname else None
 
 
-# Known Lok Sabha numbers with supplementary member data (ascending order)
-_KNOWN_LOKS = [17, 18]
+def _discover_loks(dataset_repo: str) -> list[int]:
+    """Discover available Lok Sabha numbers from supplementary/ on HuggingFace."""
+    loks = []
+    for entry in list_repo_tree(dataset_repo, path_in_repo="supplementary", repo_type="dataset"):
+        name = Path(entry.path).name
+        if name.isdigit():
+            loks.append(int(name))
+    return sorted(loks)
 
 
 def _build_mp_name_map(dataset_repo: str) -> dict[str, str]:
     """Build old_name → canonical_name map using mpNo from members.json.
 
-    Loads members.json for each known Lok Sabha from HuggingFace.  When the
+    Discovers all Lok Sabhas with supplementary data on HuggingFace.  When the
     same mpNo appears in multiple Lok Sabhas with different display names,
     the most recent (highest) Lok Sabha's name is used as the canonical form.
 
     Returns a dict mapping every known name variant to the canonical name.
     """
     by_mpno: dict[int, list[tuple[int, str]]] = {}
+    loks = _discover_loks(dataset_repo)
+    typer.echo(f"  Discovered Lok Sabhas with members.json: {loks}")
 
-    for lok in _KNOWN_LOKS:
+    for lok in loks:
         try:
             path = hf_hub_download(
                 repo_id=dataset_repo,

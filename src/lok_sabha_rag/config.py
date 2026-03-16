@@ -9,8 +9,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# -- HuggingFace dataset --
+# -- HuggingFace --
 HF_DATASET_REPO: str = os.getenv("HF_DATASET_REPO", "opensansad/lok-sabha-qa")
+HF_RAG_DATA_REPO: str = os.getenv("HF_RAG_DATA_REPO", "opensansad/lok-sabha-rag-data")
 
 # -- Qdrant --
 QDRANT_HOST: str = os.getenv("QDRANT_HOST", "localhost")
