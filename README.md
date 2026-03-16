@@ -14,8 +14,8 @@
 
 Part of the **OpenSansad** initiative — an effort to make Sansad's (Indian Parliament's) workings more accessible and transparent through open data and open-source tooling. Data sourced from [Digital Sansad](https://sansad.in/) via the [lok-sabha-dataset](https://github.com/sammitjain/lok-sabha-dataset) pipeline.
 
-![OpenSansad Demo](docs/assets/demo_retrieval.png)
-![OpenSansad Demo](docs/assets/demo_synthesis.png)
+![OpenSansad Demo](docs/assets/demo_synthesis_1.png)
+![OpenSansad Demo](docs/assets/demo_synthesis_2.png)
 
 ![RAG Pipeline](docs/assets/rag_pipeline.png)
 
@@ -71,8 +71,6 @@ src/lok_sabha_rag/
 - **Data source**: [opensansad/lok-sabha-qa](https://huggingface.co/datasets/opensansad/lok-sabha-qa) on HuggingFace
 - **Metadata**: SQLite database built from the HuggingFace dataset
 - **Frontend**: Vanilla JS/CSS single-page app
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full reference.
 
 ## Related
 

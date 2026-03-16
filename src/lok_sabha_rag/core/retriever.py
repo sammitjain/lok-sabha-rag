@@ -109,7 +109,7 @@ class Retriever:
         port: int = QDRANT_PORT,
         collection: str = QDRANT_COLLECTION,
     ):
-        self.client = QdrantClient(host=host, port=port)
+        self.client = QdrantClient(host=host, port=port, timeout=60)
         self.model = EMBEDDING_MODEL
         self.collection = collection
 
