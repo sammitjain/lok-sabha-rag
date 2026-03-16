@@ -26,7 +26,13 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# === Stale / auto-generated docs ===
+PROJECT.md
+
 # === Data blobs (too large for git) ===
+data/metadata.db
+data/snapshots/
+data/test/
 # PDFs (~5.8 GB)
 data/*/pdfs/
 # Parsed JSON (~289 MB)
