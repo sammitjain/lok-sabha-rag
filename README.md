@@ -9,6 +9,10 @@
 <h1 align="center">OpenSansad — Lok Sabha Q&A RAG</h1>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+</p>
+
+<p align="center">
 Ask Questions of Questions in the Lok Sabha. Bringing transparency to India's parliamentary proceedings by making Lok Sabha Q&A records searchable with Natural Language. Stretching to 89000+ questions from 2019 to 2026 so far and growing.
 </p>
 
