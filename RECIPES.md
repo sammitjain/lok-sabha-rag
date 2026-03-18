@@ -65,13 +65,7 @@ uv run python -m lok_sabha_rag.pipeline.build_metadata_db
 ### 8. Create and download Qdrant snapshot
 
 ```bash
-# Create snapshot (returns the snapshot filename)
-curl -X POST 'http://localhost:6333/collections/lok_sabha_questions/snapshots'
-
-# Download it into data/snapshots/ (replace SNAPSHOT_NAME with the filename from above)
-mkdir -p data/snapshots
-curl -o data/snapshots/lok_sabha_questions.snapshot \
-  'http://localhost:6333/collections/lok_sabha_questions/snapshots/SNAPSHOT_NAME'
+bash scripts/snapshot.sh
 ```
 
 ### 9. Publish snapshot + metadata to HuggingFace

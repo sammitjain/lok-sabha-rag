@@ -257,7 +257,7 @@ def run(
     for f in chunks_files:
         logger.info("  - %s", f)
 
-    client = QdrantClient(host=host, port=port)
+    client = QdrantClient(host=host, port=port, timeout=120)
 
     if overwrite:
         existing = {c.name for c in client.get_collections().collections}
